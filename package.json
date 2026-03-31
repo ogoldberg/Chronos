@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.81.0",
     "express": "^5.2.1",
+    "pg": "^8.20.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "three": "^0.183.2"
@@ -20,6 +21,7 @@
     "@eslint/js": "^9.39.4",
     "@types/express": "^5.0.6",
     "@types/node": "^24.12.0",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.183.1",

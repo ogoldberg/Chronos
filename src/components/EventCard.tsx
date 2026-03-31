@@ -41,8 +41,8 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
       backdropFilter: 'blur(20px)',
       boxShadow: `0 0 40px ${event.color}20, 0 20px 60px rgba(0,0,0,0.5)`,
     }}>
-      {/* Header image */}
-      {wiki?.thumb && (
+      {/* Header image — prefer event's own image, fall back to Wikipedia */}
+      {(event.imageUrl || wiki?.thumb) && (
         <div style={{
           width: '100%',
           height: 180,
@@ -50,7 +50,7 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           position: 'relative',
         }}>
           <img
-            src={wiki.thumb}
+            src={event.imageUrl || wiki?.thumb}
             alt={event.title}
             style={{
               width: '100%',
@@ -101,8 +101,20 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           <div>
             <h2 style={{ margin: 0, color: '#fff', fontSize: 20 }}>{event.title}</h2>
             <span style={{ color: event.color, fontSize: 13, fontFamily: 'monospace' }}>
-              {formatYear(event.year)}
+              {event.timestamp
+                ? new Date(event.timestamp).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: event.precision && ['month','week','day','hour','minute'].includes(event.precision) ? 'long' : undefined,
+                    day: event.precision && ['day','hour','minute'].includes(event.precision) ? 'numeric' : undefined,
+                  })
+                : formatYear(event.year)
+              }
             </span>
+            {event.precision && event.precision !== 'year' && (
+              <span style={{ color: '#ffffff40', fontSize: 10, marginLeft: 6 }}>
+                ({event.precision} precision)
+              </span>
+            )}
           </div>
         </div>
 
@@ -159,6 +171,60 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
             }}>
               {wiki.extract}
             </p>
+          </div>
+        )}
+
+        {/* Video embed */}
+        {event.videoUrl && (
+          <div style={{
+            marginBottom: 16,
+            borderRadius: 10,
+            overflow: 'hidden',
+            background: 'rgba(255,255,255,0.04)',
+          }}>
+            <div style={{ fontSize: 10, color: '#ffffff50', fontWeight: 600, letterSpacing: 1, padding: '10px 14px 0' }}>
+              VIDEO
+            </div>
+            <a
+              href={event.videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 14px',
+                color: '#ffffffcc',
+                textDecoration: 'none',
+                fontSize: 13,
+              }}
+            >
+              ▶️ Watch video
+              {event.mediaCaption && <span style={{ color: '#ffffff60', fontSize: 11 }}>— {event.mediaCaption}</span>}
+            </a>
+          </div>
+        )}
+
+        {/* Audio */}
+        {event.audioUrl && (
+          <div style={{
+            marginBottom: 16,
+            borderRadius: 10,
+            overflow: 'hidden',
+            background: 'rgba(255,255,255,0.04)',
+            padding: 14,
+          }}>
+            <div style={{ fontSize: 10, color: '#ffffff50', fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>
+              AUDIO
+            </div>
+            <audio controls src={event.audioUrl} style={{ width: '100%', height: 32 }} />
+          </div>
+        )}
+
+        {/* Media credit */}
+        {event.mediaCredit && (
+          <div style={{ color: '#ffffff30', fontSize: 10, marginBottom: 12, fontStyle: 'italic' }}>
+            {event.mediaCredit}
           </div>
         )}
 

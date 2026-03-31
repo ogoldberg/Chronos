@@ -1,5 +1,8 @@
 import type { Plugin } from 'vite';
 import Anthropic from '@anthropic-ai/sdk';
+import { initDB, upsertEvents, getEventsInRange } from './db';
+
+let dbReady = false;
 
 // Server-side cache to avoid duplicate API calls for the same region
 const discoveryCache = new Map<string, { events: any[]; timestamp: number }>();
@@ -20,6 +23,15 @@ export function apiPlugin(): Plugin {
     configureServer(server) {
       const anthropic = new Anthropic();
 
+      // Try to initialize DB (graceful fallback if no Postgres)
+      if (process.env.DATABASE_URL) {
+        initDB()
+          .then(() => { dbReady = true; console.log('[CHRONOS] PostgreSQL connected'); })
+          .catch(err => { console.log('[CHRONOS] No PostgreSQL — using in-memory cache only:', err.message); });
+      } else {
+        console.log('[CHRONOS] No DATABASE_URL — using in-memory cache only');
+      }
+
       const parseBody = (req: any): Promise<any> =>
         new Promise((resolve) => {
           let body = '';
@@ -31,6 +43,29 @@ export function apiPlugin(): Plugin {
         });
 
       server.middlewares.use(async (req, res, next) => {
+        // GET /api/events?start=X&end=Y — read from DB
+        if (req.method === 'GET' && req.url?.startsWith('/api/events')) {
+          if (!dbReady) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Database not available' }));
+            return;
+          }
+          const url = new URL(req.url, 'http://localhost');
+          const startYear = parseFloat(url.searchParams.get('start') || '-14000000000');
+          const endYear = parseFloat(url.searchParams.get('end') || '2030');
+          const maxSpan = url.searchParams.has('maxSpan') ? parseFloat(url.searchParams.get('maxSpan')!) : undefined;
+          const limit = parseInt(url.searchParams.get('limit') || '200', 10);
+          try {
+            const events = await getEventsInRange(startYear, endYear, maxSpan, limit);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ events }));
+          } catch (err: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+
         if (req.method !== 'POST') return next();
 
         if (req.url === '/api/discover') {
@@ -77,7 +112,13 @@ CRITICAL RULES:
 - Wiki titles must be real Wikipedia article titles
 
 Return ONLY a JSON array, no other text:
-[{"title":"Event Title","year":1234,"emoji":"🎯","color":"#hexcolor","description":"One vivid sentence.","category":"civilization","wiki":"Wikipedia_Article_Title","lat":40.7,"lng":-74.0,"geoType":"point"}]
+[{"title":"Event Title","year":1234.58,"emoji":"🎯","color":"#hexcolor","description":"One vivid sentence.","category":"civilization","wiki":"Wikipedia_Article_Title","lat":40.7,"lng":-74.0,"geoType":"point","precision":"month","timestamp":"1234-07-15T00:00:00Z"}]
+
+TIME PRECISION — be as precise as possible:
+- "year" is a float: use decimals for sub-year (e.g. 1969.55 for July 1969, 1776.5 for July 4 1776)
+- Include "precision": "year", "quarter", "month", "week", "day", or "hour" — as precise as historically known
+- Include "timestamp" (ISO 8601) when month or finer is known (e.g. "1969-07-20T20:17:00Z")
+- For ancient/prehistoric events, "year" precision is fine
 
 GEOGRAPHIC DATA — include for ALL events where a location makes sense:
 - lat/lng: approximate coordinates of where the event occurred
@@ -102,9 +143,31 @@ Color guide: red=#dc143c warfare/death, blue=#4169e1 exploration/science, gold=#
             const jsonMatch = texts.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
               const events = JSON.parse(jsonMatch[0]);
-              // Cache it
+              // Cache in memory
               discoveryCache.set(cacheKey, { events, timestamp: Date.now() });
               pruneCache();
+              // Persist to DB if available
+              if (dbReady) {
+                upsertEvents(events.map((e: any, i: number) => ({
+                  id: `d-${tierId}-${startYear}-${i}`,
+                  title: e.title,
+                  year: e.year,
+                  timestamp: e.timestamp || null,
+                  precision: e.precision || 'year',
+                  emoji: e.emoji,
+                  color: e.color,
+                  description: e.description,
+                  category: e.category,
+                  source: 'discovered',
+                  zoom_tier: tierId,
+                  wiki: e.wiki,
+                  lat: e.lat,
+                  lng: e.lng,
+                  geo_type: e.geoType,
+                  path: e.path,
+                  region: e.region,
+                }))).catch(err => console.error('[DB] Persist error:', err.message));
+              }
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ events }));
             } else {

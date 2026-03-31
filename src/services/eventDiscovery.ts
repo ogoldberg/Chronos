@@ -272,6 +272,15 @@ async function fetchCell(
       category: e.category || 'civilization',
       source: 'discovered' as const,
       wiki: e.wiki,
+      // Time precision
+      timestamp: e.timestamp,
+      precision: e.precision,
+      // Multimedia
+      imageUrl: e.imageUrl || e.image_url,
+      videoUrl: e.videoUrl || e.video_url,
+      audioUrl: e.audioUrl || e.audio_url,
+      mediaCaption: e.mediaCaption || e.media_caption,
+      mediaCredit: e.mediaCredit || e.media_credit,
       // Geographic data
       lat: e.lat,
       lng: e.lng,
