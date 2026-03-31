@@ -14,6 +14,15 @@ export interface TimelineEvent {
     imageUrl: string;
     articleUrl: string;
   };
+  // Geographic data
+  lat?: number;
+  lng?: number;
+  // For journeys/routes: array of [lat, lng] waypoints
+  path?: [number, number][];
+  // Region highlight: array of [lat, lng] polygon points
+  region?: [number, number][];
+  // Visual hint for globe: 'point' | 'path' | 'region' | 'battle' | 'storm'
+  geoType?: 'point' | 'path' | 'region' | 'battle' | 'storm';
 }
 
 export interface Viewport {

@@ -272,6 +272,12 @@ async function fetchCell(
       category: e.category || 'civilization',
       source: 'discovered' as const,
       wiki: e.wiki,
+      // Geographic data
+      lat: e.lat,
+      lng: e.lng,
+      geoType: e.geoType,
+      path: e.path,
+      region: e.region,
       // Set maxSpan so events from this tier hide when zoomed out past it
       maxSpan: tier.maxSpan === Infinity ? undefined : tier.maxSpan * 2,
     }));

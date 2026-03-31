@@ -11,17 +11,19 @@ import EventCard from './components/EventCard';
 import InsightsPanel from './components/InsightsPanel';
 import ChatPanel from './components/ChatPanel';
 import TourOverlay from './components/TourOverlay';
+import GlobePanel from './components/GlobePanel';
 import './App.css';
 
 export default function App() {
   const [viewport, setViewport] = useState<Viewport>({ centerYear: -4e9, span: 2.8e10 });
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
-  const [, setHoveredEvent] = useState<TimelineEvent | null>(null);
+  const [hoveredEvent, setHoveredEvent] = useState<TimelineEvent | null>(null);
   const [dynamicEvents, setDynamicEvents] = useState<TimelineEvent[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [chatInitMsg, setChatInitMsg] = useState<string | undefined>();
   const [voice, setVoice] = useState(false);
   const [cacheStats, setCacheStats] = useState({ cells: 0, events: 0 });
+  const [showGlobe, setShowGlobe] = useState(true);
 
   // Tour state
   const [tourStops, setTourStops] = useState<TourStop[] | null>(null);
@@ -177,6 +179,15 @@ export default function App() {
     setTourPlaying(false);
   }, []);
 
+  // Chat-to-timeline: add events from AI conversation
+  const handleAddEvents = useCallback((newEvents: TimelineEvent[]) => {
+    setDynamicEvents(prev => {
+      const existingTitles = new Set(prev.map(e => e.title));
+      const fresh = newEvents.filter(e => !existingTitles.has(e.title));
+      return fresh.length > 0 ? [...prev, ...fresh] : prev;
+    });
+  }, []);
+
   return (
     <div className="chronos-root">
       <TimelineCanvas
@@ -230,12 +241,33 @@ export default function App() {
 
       <InsightsPanel viewport={viewport} visibleEvents={visibleEvents} />
 
+      {/* Globe panel */}
+      {showGlobe && (
+        <GlobePanel
+          events={visibleEvents}
+          selectedEvent={selectedEvent}
+          hoveredEvent={hoveredEvent}
+          isCosmicScale={viewport.span > 1e8}
+          onClose={() => setShowGlobe(false)}
+        />
+      )}
+      {!showGlobe && (
+        <button
+          className="globe-toggle"
+          onClick={() => setShowGlobe(true)}
+          title="Show globe"
+        >
+          🌍
+        </button>
+      )}
+
       <ChatPanel
         viewport={viewport}
         visibleEvents={visibleEvents}
         selectedEvent={selectedEvent}
         onNavigate={(y, s) => animateTo(y, s)}
         onStartTour={handleStartTour}
+        onAddEvents={handleAddEvents}
         initialMessage={chatInitMsg}
       />
 

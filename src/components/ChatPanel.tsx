@@ -8,6 +8,7 @@ interface Props {
   selectedEvent: TimelineEvent | null;
   onNavigate: (year: number, span: number) => void;
   onStartTour: (stops: TourStop[]) => void;
+  onAddEvents: (events: TimelineEvent[]) => void;
   initialMessage?: string;
 }
 
@@ -25,6 +26,7 @@ export default function ChatPanel({
   selectedEvent,
   onNavigate,
   onStartTour,
+  onAddEvents,
   initialMessage,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -95,6 +97,40 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
         }
       });
 
+      // Extract events to persist to timeline
+      const eventsMatch = content.match(/\[\[EVENTS:(\[[\s\S]*?\])\]\]/);
+      if (eventsMatch) {
+        content = content.replace(eventsMatch[0], '').trim();
+        try {
+          const rawEvents = JSON.parse(eventsMatch[1]);
+          if (Array.isArray(rawEvents) && rawEvents.length > 0) {
+            const newEvents: TimelineEvent[] = rawEvents
+              .filter((e: any) => e.title && e.year != null)
+              .map((e: any, i: number) => ({
+                id: `chat-${Date.now()}-${i}`,
+                title: e.title,
+                year: e.year,
+                emoji: e.emoji || '📌',
+                color: e.color || '#888',
+                description: e.description || '',
+                category: e.category || 'civilization',
+                source: 'discovered' as const,
+                wiki: e.wiki,
+                lat: e.lat,
+                lng: e.lng,
+                geoType: e.geoType,
+                path: e.path,
+                region: e.region,
+              }));
+            if (newEvents.length > 0) {
+              onAddEvents(newEvents);
+            }
+          }
+        } catch (e) {
+          console.error('Events parse error:', e);
+        }
+      }
+
       // Extract tour
       const tourMatch = content.match(/\[\[TOUR:(\[[\s\S]*?\])\]\]/);
       if (tourMatch) {
@@ -121,7 +157,7 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
     } finally {
       setLoading(false);
     }
-  }, [messages, buildContext, onNavigate, onStartTour]);
+  }, [messages, buildContext, onNavigate, onStartTour, onAddEvents]);
 
   if (!open) {
     return (

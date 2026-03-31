@@ -77,7 +77,13 @@ CRITICAL RULES:
 - Wiki titles must be real Wikipedia article titles
 
 Return ONLY a JSON array, no other text:
-[{"title":"Event Title","year":1234,"emoji":"🎯","color":"#hexcolor","description":"One vivid sentence.","category":"civilization","wiki":"Wikipedia_Article_Title"}]
+[{"title":"Event Title","year":1234,"emoji":"🎯","color":"#hexcolor","description":"One vivid sentence.","category":"civilization","wiki":"Wikipedia_Article_Title","lat":40.7,"lng":-74.0,"geoType":"point"}]
+
+GEOGRAPHIC DATA — include for ALL events where a location makes sense:
+- lat/lng: approximate coordinates of where the event occurred
+- geoType: "point" for events at a location, "path" for journeys/voyages/migrations, "battle" for conflicts, "region" for territorial changes
+- path: ONLY for geoType "path" — array of [lat,lng] waypoints, e.g. "path":[[40.7,-74.0],[48.8,2.3]]
+- For cosmic/geological events without a specific earthly location, omit lat/lng entirely
 
 Color guide: red=#dc143c warfare/death, blue=#4169e1 exploration/science, gold=#daa520 culture/religion, green=#228b22 nature/environment, purple=#9370db philosophy/ideas, orange=#ff8c00 technology/innovation, pink=#ff69b4 art/music, teal=#20b2aa trade/economics`,
               messages: [
@@ -168,7 +174,7 @@ Color guide: red=#dc143c warfare/death, blue=#4169e1 exploration/science, gold=#
 CURRENT TIMELINE VIEW:
 ${context || '(no context)'}
 
-You have TWO special powers:
+You have THREE special powers:
 
 1. TIMELINE NAVIGATION: To move the timeline, embed in your text:
    [[GOTO:year,span]]
@@ -179,12 +185,22 @@ You have TWO special powers:
    where json_array is: [{"year":number,"span":number,"text":"narration for this stop"},...]
    Include 4-8 stops. Each "text" should be 1-3 vivid sentences.
 
+3. ADD EVENTS TO TIMELINE: When you mention specific historical events in your response, you can permanently add them to the timeline by embedding:
+   [[EVENTS:json_array]]
+   where json_array is: [{"title":"Event Title","year":1234,"emoji":"🎯","color":"#hexcolor","description":"One vivid sentence.","category":"civilization","wiki":"Wikipedia_Article_Title","lat":40.7,"lng":-74.0,"geoType":"point"}]
+
+   Use this LIBERALLY — whenever you discuss specific events, add them! This is how the timeline grows.
+   For journeys, use geoType:"path" and include a "path" array of [lat,lng] waypoints.
+   For battles, use geoType:"battle".
+   Categories: cosmic, geological, evolutionary, civilization, modern
+
 RULES:
 - Be vivid, specific, and surprising — not generic
 - Connect events to broader patterns
 - Keep responses concise (2-4 paragraphs max) unless they ask for depth
 - For tours, make narration feel like a documentary
-- Use web search when you need specific facts or to verify claims`,
+- Use web search when you need specific facts or to verify claims
+- ALWAYS include [[EVENTS:...]] for any specific events you mention — this builds the timeline`,
               messages,
             });
 

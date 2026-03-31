@@ -160,8 +160,43 @@ html, body, #root {
   }
 }
 
+/* Globe toggle button */
+.globe-toggle {
+  position: absolute;
+  top: 55px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(13, 17, 23, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.globe-toggle:hover {
+  transform: scale(1.1);
+}
+
 /* Selection none for canvas area */
 canvas {
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Mobile: hide globe by default, smaller chat */
+@media (max-width: 600px) {
+  .globe-panel {
+    display: none;
+  }
+  .globe-toggle {
+    display: none;
+  }
 }
