@@ -4,6 +4,7 @@ import { ANCHOR_EVENTS } from './data/anchorEvents';
 import { clamp, formatYearShort, scaleLabel } from './utils/format';
 import { getVisibleRange } from './canvas/viewport';
 import { speak, stopSpeech } from './utils/speech';
+import { discoverEvents, getCacheStats } from './services/eventDiscovery';
 import TimelineCanvas from './canvas/TimelineCanvas';
 import EraChips from './components/EraChips';
 import EventCard from './components/EventCard';
@@ -17,9 +18,10 @@ export default function App() {
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   const [, setHoveredEvent] = useState<TimelineEvent | null>(null);
   const [dynamicEvents, setDynamicEvents] = useState<TimelineEvent[]>([]);
-  const [discoveredRegions, setDiscoveredRegions] = useState<Set<string>>(new Set());
+  const [discovering, setDiscovering] = useState(false);
   const [chatInitMsg, setChatInitMsg] = useState<string | undefined>();
   const [voice, setVoice] = useState(false);
+  const [cacheStats, setCacheStats] = useState({ cells: 0, events: 0 });
 
   // Tour state
   const [tourStops, setTourStops] = useState<TourStop[] | null>(null);
@@ -28,11 +30,25 @@ export default function App() {
   const tourTimerRef = useRef<number>(0);
   const animRef = useRef<number>(0);
 
-  // All events combined
-  const allEvents = useMemo(
-    () => [...ANCHOR_EVENTS, ...dynamicEvents],
-    [dynamicEvents]
-  );
+  // All events: anchors + discovered (deduplicated by title)
+  const allEvents = useMemo(() => {
+    const seen = new Set<string>();
+    const result: TimelineEvent[] = [];
+    // Anchors first (higher priority)
+    for (const ev of ANCHOR_EVENTS) {
+      if (!seen.has(ev.title)) {
+        seen.add(ev.title);
+        result.push(ev);
+      }
+    }
+    for (const ev of dynamicEvents) {
+      if (!seen.has(ev.title)) {
+        seen.add(ev.title);
+        result.push(ev);
+      }
+    }
+    return result;
+  }, [dynamicEvents]);
 
   // Visible events for current viewport
   const visibleEvents = useMemo(() => {
@@ -64,55 +80,43 @@ export default function App() {
     animRef.current = requestAnimationFrame(step);
   }, [viewport]);
 
-  // Dynamic event discovery
+  // Dynamic event discovery — grid-based, unlimited, with caching
   const discoverTimerRef = useRef<number>(0);
+  const existingTitlesRef = useRef<Set<string>>(new Set());
+
+  // Keep existing titles set in sync
   useEffect(() => {
-    if (viewport.span > 1e8) return;
+    existingTitlesRef.current = new Set(allEvents.map(e => e.title));
+  }, [allEvents]);
 
-    const [left, right] = getVisibleRange(viewport);
-    const regionKey = `${Math.round(left / (viewport.span * 0.5))}_${Math.round(viewport.span)}`;
-    if (discoveredRegions.has(regionKey)) return;
-
+  useEffect(() => {
     clearTimeout(discoverTimerRef.current);
-    discoverTimerRef.current = window.setTimeout(async () => {
-      try {
-        const existingTitles = allEvents
-          .filter(e => e.year >= left && e.year <= right)
-          .map(e => e.title);
-
-        const resp = await fetch('/api/discover', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            startYear: Math.round(left),
-            endYear: Math.round(right),
-            existingTitles,
-            count: 6,
-          }),
-        });
-        const data = await resp.json();
-        if (data.events?.length) {
-          const newEvents: TimelineEvent[] = data.events.map((e: any, i: number) => ({
-            id: `d-${Date.now()}-${i}`,
-            title: e.title,
-            year: e.year,
-            emoji: e.emoji || '📌',
-            color: e.color || '#888',
-            description: e.description,
-            category: e.category || 'civilization',
-            source: 'discovered' as const,
-            wiki: e.wiki,
-          }));
+    discoverTimerRef.current = window.setTimeout(() => {
+      const result = discoverEvents(
+        viewport.centerYear,
+        viewport.span,
+        existingTitlesRef.current,
+        (newEvents) => {
           setDynamicEvents(prev => [...prev, ...newEvents]);
-          setDiscoveredRegions(prev => new Set(prev).add(regionKey));
-        }
-      } catch {
-        // Silently fail
+          setCacheStats(getCacheStats());
+        },
+      );
+
+      // Merge any already-cached events we haven't seen yet
+      if (result.events.length > 0) {
+        setDynamicEvents(prev => {
+          const existingIds = new Set(prev.map(e => e.id));
+          const fresh = result.events.filter(e => !existingIds.has(e.id));
+          return fresh.length > 0 ? [...prev, ...fresh] : prev;
+        });
       }
-    }, 1200);
+
+      setDiscovering(result.loading);
+      setCacheStats(getCacheStats());
+    }, 600); // debounce — wait for viewport to settle
 
     return () => clearTimeout(discoverTimerRef.current);
-  }, [viewport, allEvents, discoveredRegions]);
+  }, [viewport.centerYear, viewport.span]);
 
   // Tour playback
   const playTourStop = useCallback((stops: TourStop[], idx: number) => {
@@ -186,10 +190,18 @@ export default function App() {
 
       <EraChips viewport={viewport} onNavigate={(y, s) => animateTo(y, s)} />
 
-      {/* Zoom level + voice toggle */}
+      {/* Zoom level + discovery status + voice toggle */}
       <div className="top-right-controls">
+        {discovering && (
+          <span className="discover-badge">
+            Discovering events...
+          </span>
+        )}
         <span className="zoom-badge">
           {scaleLabel(viewport.span)} · {formatYearShort(viewport.centerYear)}
+        </span>
+        <span className="cache-badge" title="Cached regions / total discovered events">
+          {cacheStats.cells} regions · {cacheStats.events + ANCHOR_EVENTS.length} events
         </span>
         <button
           className={`voice-btn ${voice ? 'active' : ''}`}

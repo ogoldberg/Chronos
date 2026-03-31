@@ -1,13 +1,25 @@
 import type { Plugin } from 'vite';
 import Anthropic from '@anthropic-ai/sdk';
 
+// Server-side cache to avoid duplicate API calls for the same region
+const discoveryCache = new Map<string, { events: any[]; timestamp: number }>();
+const CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
+const MAX_CACHE_SIZE = 1000;
+
+function pruneCache() {
+  if (discoveryCache.size <= MAX_CACHE_SIZE) return;
+  const entries = [...discoveryCache.entries()]
+    .sort((a, b) => a[1].timestamp - b[1].timestamp);
+  const toRemove = entries.slice(0, entries.length - MAX_CACHE_SIZE);
+  for (const [key] of toRemove) discoveryCache.delete(key);
+}
+
 export function apiPlugin(): Plugin {
   return {
     name: 'chronos-api',
     configureServer(server) {
       const anthropic = new Anthropic();
 
-      // Parse JSON body middleware
       const parseBody = (req: any): Promise<any> =>
         new Promise((resolve) => {
           let body = '';
@@ -22,46 +34,71 @@ export function apiPlugin(): Plugin {
         if (req.method !== 'POST') return next();
 
         if (req.url === '/api/discover') {
-          const { startYear, endYear, existingTitles = [], count = 8 } = await parseBody(req);
+          const { startYear, endYear, existingTitles = [], count = 10, tierId = '' } = await parseBody(req);
+
+          // Check server cache
+          const cacheKey = `${tierId}:${startYear}:${endYear}`;
+          const cached = discoveryCache.get(cacheKey);
+          if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ events: cached.events, cached: true }));
+            return;
+          }
+
+          // Determine era context for better prompting
+          const absStart = Math.abs(startYear);
+          let eraContext = '';
+          if (absStart > 1e9) eraContext = 'Focus on cosmic and astrophysical events: star formation, galaxy mergers, cosmic structure. Use category "cosmic".';
+          else if (absStart > 1e8) eraContext = 'Focus on geological and planetary events: tectonic activity, mass extinctions, ice ages, atmospheric changes. Use category "geological".';
+          else if (absStart > 1e6) eraContext = 'Focus on evolutionary milestones: species emergence, migration, adaptation, extinction. Use category "evolutionary".';
+          else if (startYear < -3000) eraContext = 'Focus on early human history: tool development, settlement, early agriculture, cultural evolution. Use category "civilization".';
+          else if (startYear < 1500) eraContext = 'Focus on civilizations: empires, trade, religion, philosophy, technology, warfare, art, architecture. Use category "civilization".';
+          else eraContext = 'Focus on modern history: science, technology, politics, culture, social movements, exploration, industry, warfare. Use category "modern".';
 
           try {
             const msg = await anthropic.messages.create({
               model: 'claude-sonnet-4-20250514',
-              max_tokens: 2000,
+              max_tokens: 3000,
               tools: [{ type: 'web_search_20250305' as any, name: 'web_search' }],
-              system: `You are a historian generating events for an interactive timeline. Return ONLY a JSON array of events. Each event must be a real, verified historical event. Use web search to verify facts.
+              system: `You are a historian generating events for an interactive timeline. Return ONLY a JSON array of events. Each event must be a REAL, VERIFIED historical/scientific event. Use web search to verify facts when needed.
 
-RULES:
-- Return exactly ${count} events between ${startYear} and ${endYear}
-- Events must be historically significant and verified
-- Spread events across the time range
-- Do NOT include events with these titles: ${existingTitles.join(', ')}
-- Include diverse topics: politics, science, culture, technology, warfare, religion, art
-- Prefer lesser-known but fascinating events over obvious ones
+TIME PERIOD: ${startYear} to ${endYear}
+${eraContext}
 
-Return ONLY a JSON array in this exact format, no other text:
-[{"title":"Event Title","year":1234,"emoji":"🎯","color":"#hexcolor","description":"One vivid sentence about why this matters.","category":"civilization","wiki":"Wikipedia_Article_Title"}]
+CRITICAL RULES:
+- Return exactly ${count} events, evenly spread across the time range
+- Every event MUST be real and verifiable — no fabrication
+- Each event needs a specific year (or best scientific estimate for ancient events)
+- Include DIVERSE topics within the era — don't cluster on one subject
+- Prefer fascinating lesser-known events alongside major ones
+- Do NOT include events with these titles: ${existingTitles.slice(0, 30).join(', ')}
+- For prehistoric/geological events, use scientific consensus dates
+- Descriptions should be vivid, specific, and one sentence
+- Wiki titles must be real Wikipedia article titles
 
-Categories: cosmic, geological, evolutionary, civilization, modern
-Use "modern" for anything after 1500 CE, "civilization" for ancient/medieval.`,
+Return ONLY a JSON array, no other text:
+[{"title":"Event Title","year":1234,"emoji":"🎯","color":"#hexcolor","description":"One vivid sentence.","category":"civilization","wiki":"Wikipedia_Article_Title"}]
+
+Color guide: red=#dc143c warfare/death, blue=#4169e1 exploration/science, gold=#daa520 culture/religion, green=#228b22 nature/environment, purple=#9370db philosophy/ideas, orange=#ff8c00 technology/innovation, pink=#ff69b4 art/music, teal=#20b2aa trade/economics`,
               messages: [
                 {
                   role: 'user',
-                  content: `Generate ${count} historically important events between ${startYear} and ${endYear}. Search the web to verify your facts.`,
+                  content: `Generate ${count} historically important events between ${startYear} and ${endYear}. Search the web to verify key facts. Spread them evenly across the entire range.`,
                 },
               ],
             });
 
-            // Extract text content
             const texts = msg.content
               .filter((b): b is Anthropic.TextBlock => b.type === 'text')
               .map(b => b.text)
               .join('\n');
 
-            // Parse JSON from response
             const jsonMatch = texts.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
               const events = JSON.parse(jsonMatch[0]);
+              // Cache it
+              discoveryCache.set(cacheKey, { events, timestamp: Date.now() });
+              pruneCache();
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ events }));
             } else {

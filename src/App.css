@@ -45,6 +45,29 @@ html, body, #root {
   backdrop-filter: blur(10px);
 }
 
+.discover-badge {
+  color: #00bfff;
+  font-size: 10px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  background: rgba(0, 191, 255, 0.1);
+  border: 1px solid rgba(0, 191, 255, 0.2);
+  padding: 3px 8px;
+  border-radius: 8px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.cache-badge {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 9px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  padding: 3px 8px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .voice-btn {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
