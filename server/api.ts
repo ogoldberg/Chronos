@@ -2,7 +2,9 @@ import type { Plugin } from 'vite';
 import { getProvider, getProviderConfig, setProvider } from './providers/index';
 import type { AIProviderConfig } from './providers/index';
 import { initDB, upsertEvents, getEventsInRange } from './db';
-import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM, PARALLELS_SYSTEM, MYTHS_SYSTEM } from './prompts';
+import { initAuth, getAuth } from './auth';
+import { toNodeHandler } from 'better-auth/node';
+import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM, PARALLELS_SYSTEM, MYTHS_SYSTEM, QUIZ_SYSTEM } from './prompts';
 
 let dbReady = false;
 
@@ -238,6 +240,33 @@ export async function handleApiRequest(
     return { status: 200, data: { myths: [] } };
   }
 
+  // POST /api/quiz
+  if (method === 'POST' && url === '/api/quiz') {
+    if (!checkRateLimit('quiz')) {
+      return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
+    }
+    const { events = [], era = 'modern' } = body;
+    if (!Array.isArray(events)) {
+      return { status: 400, data: { error: 'events must be an array of strings.' } };
+    }
+
+    const system = QUIZ_SYSTEM(events.slice(0, 10), era);
+    const resp = await ai.chat(system, [
+      { role: 'user', content: `Generate a history quiz question about ${era} era events.` },
+    ], { maxTokens: 800 });
+
+    const jsonMatch = resp.text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.question && Array.isArray(parsed.options) && parsed.options.length === 4 && typeof parsed.correctIndex === 'number') {
+          return { status: 200, data: parsed };
+        }
+      } catch { /* fall through */ }
+    }
+    return { status: 500, data: { error: 'Failed to generate quiz question. Try again.' } };
+  }
+
   // POST /api/chat
   if (method === 'POST' && url === '/api/chat') {
     const { messages, context } = body;
@@ -284,8 +313,9 @@ export function apiPlugin(): Plugin {
   return {
     name: 'chronos-api',
     configureServer(server) {
-      // Init provider
+      // Init provider + auth
       getProvider();
+      initAuth();
 
       // Init DB
       if (process.env.DATABASE_URL) {
@@ -294,6 +324,18 @@ export function apiPlugin(): Plugin {
           .catch(err => console.log('[CHRONOS] No PostgreSQL — in-memory cache only:', err.message));
       } else {
         console.log('[CHRONOS] No DATABASE_URL — in-memory cache only');
+      }
+
+      // Better Auth handler
+      const authInstance = getAuth();
+      if (authInstance) {
+        const authHandler = toNodeHandler(authInstance);
+        server.middlewares.use(async (req, res, next) => {
+          if (req.url?.startsWith('/api/auth')) {
+            return authHandler(req, res);
+          }
+          next();
+        });
       }
 
       server.middlewares.use(async (req, res, next) => {

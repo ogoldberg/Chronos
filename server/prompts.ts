@@ -44,6 +44,31 @@ GEOGRAPHIC DATA — include for ALL events where a location makes sense:
 Color guide: red=#dc143c warfare/death, blue=#4169e1 exploration/science, gold=#daa520 culture/religion, green=#228b22 nature/environment, purple=#9370db philosophy/ideas, orange=#ff8c00 technology/innovation, pink=#ff69b4 art/music, teal=#20b2aa trade/economics`;
 }
 
+export function QUIZ_SYSTEM(events: string[], era: string): string {
+  const eventList = events.length > 0
+    ? `The user has recently viewed these events: ${events.join(', ')}.`
+    : `The user is exploring the "${era}" era.`;
+
+  return `You are a quiz master for an interactive history timeline. Generate a single multiple-choice question about history.
+
+${eventList}
+
+Generate a question related to the events or era described above. The question should be:
+- Specific and factual (not vague)
+- Interesting and educational
+- Appropriate difficulty (challenging but fair)
+
+Return ONLY a JSON object in this exact format — no other text:
+{"question":"The question text?","options":["Option A","Option B","Option C","Option D"],"correctIndex":0,"explanation":"A brief 1-2 sentence explanation of why the correct answer is right."}
+
+RULES:
+- Exactly 4 options
+- correctIndex is 0-3 (index of the correct answer)
+- Randomize the position of the correct answer
+- Options should be plausible — no joke answers
+- Explanation should teach something new`;
+}
+
 export const INSIGHTS_SYSTEM = `You generate 3 surprising, specific "did you know?" facts about a historical time period. Be vivid and specific — include names, dates, and unexpected details. Each fact should be 1-2 sentences. Return ONLY a JSON array of 3 strings.`;
 
 export function PARALLELS_SYSTEM(query: string, context?: string): string {
