@@ -140,6 +140,7 @@ export default function GlobePanel({
   hoveredEvent,
   isCosmicScale,
   onClose,
+  currentYear = 0,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -148,6 +149,7 @@ export default function GlobePanel({
   const globeRef = useRef<THREE.Group | null>(null);
   const markersRef = useRef<THREE.Group | null>(null);
   const pathsRef = useRef<THREE.Group | null>(null);
+  const empiresRef = useRef<THREE.Group | null>(null);
   const animFrameRef = useRef<number>(0);
   const rotationRef = useRef({ x: 0, y: 0, autoRotate: true });
   const dragRef = useRef({ active: false, x: 0, y: 0 });
@@ -250,6 +252,11 @@ export default function GlobePanel({
     const paths = new THREE.Group();
     pathsRef.current = paths;
     globeGroup.add(paths);
+
+    // Empire overlays group
+    const empiresGroup = new THREE.Group();
+    empiresRef.current = empiresGroup;
+    globeGroup.add(empiresGroup);
 
     // Lighting
     const ambient = new THREE.AmbientLight(0x334455, 1.5);
@@ -458,6 +465,33 @@ export default function GlobePanel({
       }
     }
   }, [events, selectedEvent, hoveredEvent]);
+
+  // Update empire overlays when currentYear changes
+  useEffect(() => {
+    const empiresGroup = empiresRef.current;
+    if (!empiresGroup) return;
+
+    // Clear existing empire meshes
+    while (empiresGroup.children.length) empiresGroup.remove(empiresGroup.children[0]);
+
+    // Only show empires at civilization scale (year > -5000)
+    if (currentYear < -5000) return;
+
+    // Filter empires active at current year
+    const activeEmpires = EMPIRES.filter(
+      (e) => currentYear >= e.startYear && currentYear <= e.endYear,
+    );
+
+    for (const empire of activeEmpires) {
+      // Filled polygon overlay
+      const mesh = buildEmpireMesh(empire, RADIUS);
+      empiresGroup.add(mesh);
+
+      // Border outline
+      const border = buildEmpireBorder(empire, RADIUS);
+      empiresGroup.add(border);
+    }
+  }, [currentYear]);
 
   // Rotate globe to focus on selected/hovered event
   useEffect(() => {
