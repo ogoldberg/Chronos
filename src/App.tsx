@@ -17,6 +17,7 @@ import LaneToggle from './features/comparison/LaneToggle';
 import PanelRouter from './components/PanelRouter';
 import StatsBar from './features/gamification/StatsBar';
 import AchievementToast from './features/gamification/AchievementToast';
+import OnboardingOverlay, { triggerOnboarding, ShowMeAroundButton } from './features/onboarding/OnboardingOverlay';
 import type { TimelineEvent } from './types';
 import './App.css';
 
