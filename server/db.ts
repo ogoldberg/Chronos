@@ -27,72 +27,92 @@ export function getPool(): pg.Pool {
 // ─── Schema ───
 
 export const SCHEMA_SQL = `
--- Enable PostGIS if available (optional, graceful fallback)
--- CREATE EXTENSION IF NOT EXISTS postgis;
+-- ============================================================
+-- CHRONOS Schema v2
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS events (
   id              TEXT PRIMARY KEY,
   title           TEXT NOT NULL,
+  slug            TEXT,
 
-  -- Time: dual representation for flexibility
-  -- "year" is a float for ancient/cosmic events (e.g. -13800000000, -3300.5)
-  -- "timestamp" is for events with known date/time precision
+  -- Time
   year            DOUBLE PRECISION NOT NULL,
-  timestamp       TIMESTAMPTZ,          -- NULL for events before ~4000 BCE
-  precision       TEXT DEFAULT 'year',   -- 'year', 'quarter', 'month', 'week', 'day', 'hour', 'minute'
+  timestamp       TIMESTAMPTZ,
+  precision       TEXT DEFAULT 'year',
 
   -- Display
   emoji           TEXT DEFAULT '📌',
   color           TEXT DEFAULT '#888888',
   description     TEXT,
   category        TEXT NOT NULL DEFAULT 'civilization',
-  source          TEXT NOT NULL DEFAULT 'discovered',  -- anchor, discovered, chat, user
+  source          TEXT NOT NULL DEFAULT 'discovered',
 
-  -- Zoom tier this event was discovered at (for filtering)
+  -- Zoom
   zoom_tier       TEXT,
-  max_span        DOUBLE PRECISION,     -- hide when viewport span > this
+  max_span        DOUBLE PRECISION,
 
-  -- Wikipedia / knowledge
-  wiki            TEXT,                  -- Wikipedia article title
+  -- Knowledge (JSONB — not queried independently)
+  wiki            TEXT,
+  citations       JSONB DEFAULT '[]',
+  confidence      TEXT DEFAULT 'likely',
+  speculative_note TEXT,
 
-  -- Multimedia
-  image_url       TEXT,                  -- primary image
-  thumbnail_url   TEXT,                  -- thumbnail for timeline
-  video_url       TEXT,                  -- video link (YouTube, etc.)
-  audio_url       TEXT,                  -- audio narration or related audio
-  media_caption   TEXT,                  -- caption for primary media
-  media_credit    TEXT,                  -- attribution
+  -- Multimedia (JSONB bundle)
+  media           JSONB DEFAULT '{}',
+  -- Legacy columns kept for backward compat during migration
+  image_url       TEXT,
+  thumbnail_url   TEXT,
+  video_url       TEXT,
+  audio_url       TEXT,
+  media_caption   TEXT,
+  media_credit    TEXT,
 
-  -- Geographic
+  -- Geography
   lat             DOUBLE PRECISION,
   lng             DOUBLE PRECISION,
-  geo_type        TEXT,                  -- point, path, region, battle, storm
-  path            JSONB,                -- [[lat,lng],...] for journeys
-  region          JSONB,                -- [[lat,lng],...] polygon for territories
+  geo_type        TEXT,
+  geo_data        JSONB,
+  path            JSONB,
+  region          JSONB,
+
+  -- Quality
+  verified        BOOLEAN DEFAULT FALSE,
+  quality_score   REAL DEFAULT 0.0,
 
   -- Metadata
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW(),
-  verified        BOOLEAN DEFAULT FALSE,
-  upvotes         INTEGER DEFAULT 0,
-  downvotes       INTEGER DEFAULT 0
+  deleted_at      TIMESTAMPTZ
 );
 
--- Event connections / causality
+-- Event connections (normalized for graph traversal)
 CREATE TABLE IF NOT EXISTS event_connections (
   id              SERIAL PRIMARY KEY,
-  source_id       TEXT NOT NULL,           -- event that causes/influences
-  target_id       TEXT NOT NULL,           -- event that is caused/influenced
-  type            TEXT NOT NULL DEFAULT 'related',  -- caused, influenced, preceded, related, led_to, response_to
-  label           TEXT,                    -- human-readable: "sparked", "enabled", etc.
+  source_id       TEXT NOT NULL,
+  target_id       TEXT NOT NULL,
+  type            TEXT NOT NULL DEFAULT 'related',
+  label           TEXT,
+  confidence      TEXT DEFAULT 'likely',
+  created_by      TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_conn_source ON event_connections (source_id);
-CREATE INDEX IF NOT EXISTS idx_conn_target ON event_connections (target_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_conn_pair ON event_connections (source_id, target_id, type);
+-- Cache regions: track what AI has discovered
+CREATE TABLE IF NOT EXISTS cache_regions (
+  id              SERIAL PRIMARY KEY,
+  tier_id         TEXT NOT NULL,
+  cell_index      INTEGER NOT NULL,
+  start_year      DOUBLE PRECISION NOT NULL,
+  end_year        DOUBLE PRECISION NOT NULL,
+  event_count     INTEGER DEFAULT 0,
+  quality         TEXT DEFAULT 'standard',
+  lens            TEXT,
+  fetched_at      TIMESTAMPTZ DEFAULT NOW(),
+  expires_at      TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days')
+);
 
--- User progress and game stats
+-- User progress
 CREATE TABLE IF NOT EXISTS user_progress (
   user_id         TEXT PRIMARY KEY,
   xp              INTEGER DEFAULT 0,
@@ -105,12 +125,57 @@ CREATE TABLE IF NOT EXISTS user_progress (
   total_correct   INTEGER DEFAULT 0,
   total_attempted INTEGER DEFAULT 0,
   myths_revealed  INTEGER DEFAULT 0,
+  continents_visited JSONB DEFAULT '[]',
   bookmarks       JSONB DEFAULT '[]',
   annotations     JSONB DEFAULT '{}',
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- User custom events and annotations
+-- User bookmarks (normalized)
+CREATE TABLE IF NOT EXISTS user_bookmarks (
+  id              SERIAL PRIMARY KEY,
+  user_id         TEXT NOT NULL,
+  event_id        TEXT NOT NULL,
+  note            TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User custom lenses
+CREATE TABLE IF NOT EXISTS user_lenses (
+  id              SERIAL PRIMARY KEY,
+  user_id         TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  emoji           TEXT DEFAULT '🔍',
+  color           TEXT DEFAULT '#888',
+  description     TEXT,
+  tags            JSONB DEFAULT '[]',
+  is_public       BOOLEAN DEFAULT FALSE,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User-created tours
+CREATE TABLE IF NOT EXISTS user_tours (
+  id              SERIAL PRIMARY KEY,
+  user_id         TEXT NOT NULL,
+  title           TEXT NOT NULL,
+  description     TEXT,
+  stops           JSONB NOT NULL,
+  is_public       BOOLEAN DEFAULT FALSE,
+  plays           INTEGER DEFAULT 0,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Community quality signals
+CREATE TABLE IF NOT EXISTS event_votes (
+  id              SERIAL PRIMARY KEY,
+  user_id         TEXT NOT NULL,
+  event_id        TEXT NOT NULL,
+  vote            SMALLINT NOT NULL,
+  reason          TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User annotations
 CREATE TABLE IF NOT EXISTS user_annotations (
   id              SERIAL PRIMARY KEY,
   user_id         TEXT NOT NULL,
@@ -120,24 +185,50 @@ CREATE TABLE IF NOT EXISTS user_annotations (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_user_annotations_user ON user_annotations (user_id);
+-- Discovery audit log (append-only)
+CREATE TABLE IF NOT EXISTS discovery_log (
+  id              SERIAL PRIMARY KEY,
+  tier_id         TEXT NOT NULL,
+  start_year      DOUBLE PRECISION NOT NULL,
+  end_year        DOUBLE PRECISION NOT NULL,
+  provider        TEXT NOT NULL,
+  model           TEXT NOT NULL,
+  events_generated INTEGER DEFAULT 0,
+  events_persisted INTEGER DEFAULT 0,
+  lens            TEXT,
+  latency_ms      INTEGER,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Primary query: "give me events in year range at zoom level"
+-- ═══ Indexes ═══
+
 CREATE INDEX IF NOT EXISTS idx_events_year ON events (year);
 CREATE INDEX IF NOT EXISTS idx_events_year_category ON events (year, category);
 CREATE INDEX IF NOT EXISTS idx_events_zoom ON events (max_span, year);
 CREATE INDEX IF NOT EXISTS idx_events_source ON events (source);
 CREATE INDEX IF NOT EXISTS idx_events_title ON events (title);
-
--- Geographic index (without PostGIS, use simple btree)
+CREATE INDEX IF NOT EXISTS idx_events_confidence ON events (confidence);
 CREATE INDEX IF NOT EXISTS idx_events_geo ON events (lat, lng) WHERE lat IS NOT NULL;
-
--- Full-text search
 CREATE INDEX IF NOT EXISTS idx_events_fts ON events
   USING gin(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(description, '')));
 
--- Timestamp index for precise queries
-CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp) WHERE timestamp IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_conn_source ON event_connections (source_id);
+CREATE INDEX IF NOT EXISTS idx_conn_target ON event_connections (target_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conn_pair ON event_connections (source_id, target_id, type);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cache_region ON cache_regions (tier_id, cell_index, quality) WHERE lens IS NULL;
+CREATE INDEX IF NOT EXISTS idx_cache_tier ON cache_regions (tier_id, cell_index);
+
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON user_bookmarks (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_pair ON user_bookmarks (user_id, event_id);
+
+CREATE INDEX IF NOT EXISTS idx_votes_event ON event_votes (event_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_votes_pair ON event_votes (user_id, event_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_annotations_user ON user_annotations (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_lenses_user ON user_lenses (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_tours_user ON user_tours (user_id);
+CREATE INDEX IF NOT EXISTS idx_discovery_log_time ON discovery_log (created_at);
 `;
 
 // ─── Queries ───
@@ -330,6 +421,67 @@ export async function getNearbyEvents(
     [lat, lng, radiusDeg, limit],
   );
   return result.rows;
+}
+
+// ─── Cache Regions ───
+
+export async function getCacheRegion(tierId: string, cellIndex: number, quality = 'standard') {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT * FROM cache_regions WHERE tier_id = $1 AND cell_index = $2 AND quality = $3 AND (lens IS NULL)`,
+    [tierId, cellIndex, quality],
+  );
+  return result.rows[0] || null;
+}
+
+export async function markCacheRegion(
+  tierId: string, cellIndex: number, startYear: number, endYear: number,
+  eventCount: number, quality = 'standard', lens?: string,
+) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO cache_regions (tier_id, cell_index, start_year, end_year, event_count, quality, lens, fetched_at, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '30 days')
+     ON CONFLICT (tier_id, cell_index, quality) WHERE lens IS NULL
+     DO UPDATE SET event_count = EXCLUDED.event_count, fetched_at = NOW(), expires_at = NOW() + INTERVAL '30 days'`,
+    [tierId, cellIndex, startYear, endYear, eventCount, quality, lens ?? null],
+  );
+}
+
+export async function logDiscovery(
+  tierId: string, startYear: number, endYear: number,
+  provider: string, model: string, eventsGenerated: number,
+  eventsPersisted: number, lens?: string, latencyMs?: number,
+) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO discovery_log (tier_id, start_year, end_year, provider, model, events_generated, events_persisted, lens, latency_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [tierId, startYear, endYear, provider, model, eventsGenerated, eventsPersisted, lens ?? null, latencyMs ?? null],
+  );
+}
+
+// ─── Votes ───
+
+export async function upsertVote(userId: string, eventId: string, vote: number, reason?: string) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO event_votes (user_id, event_id, vote, reason)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, event_id) DO UPDATE SET vote = EXCLUDED.vote, reason = EXCLUDED.reason`,
+    [userId, eventId, vote, reason ?? null],
+  );
+}
+
+export async function getEventVotes(eventId: string) {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT COALESCE(SUM(CASE WHEN vote = 1 THEN 1 ELSE 0 END), 0) as upvotes,
+            COALESCE(SUM(CASE WHEN vote = -1 THEN 1 ELSE 0 END), 0) as downvotes
+     FROM event_votes WHERE event_id = $1`,
+    [eventId],
+  );
+  return result.rows[0];
 }
 
 // ─── User Progress ───
