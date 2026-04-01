@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { TimelineEvent } from '../types';
 import { EMPIRES } from '../data/empires';
 import type { Empire } from '../data/empires';
+import { allCoastlines } from '../data/coastlines';
 
 interface Props {
   events: TimelineEvent[];
@@ -187,11 +188,11 @@ export default function GlobePanel({
     globeRef.current = globeGroup;
     scene.add(globeGroup);
 
-    // Earth sphere — dark stylized globe
+    // Earth sphere — dark ocean globe
     const earthGeom = new THREE.SphereGeometry(RADIUS, 64, 64);
     const earthMat = new THREE.MeshPhongMaterial({
-      color: 0x112233,
-      emissive: 0x061122,
+      color: 0x0a1628,
+      emissive: 0x050e1a,
       specular: 0x333333,
       shininess: 25,
       transparent: true,
@@ -200,19 +201,27 @@ export default function GlobePanel({
     const earth = new THREE.Mesh(earthGeom, earthMat);
     globeGroup.add(earth);
 
-    // Wireframe overlay for land feel
-    const wireGeom = new THREE.SphereGeometry(RADIUS * 1.002, 32, 32);
-    const wireMat = new THREE.MeshBasicMaterial({
-      color: 0x1a3a5c,
-      wireframe: true,
+    // Coastline outlines — real continent shapes
+    const coastlineGroup = new THREE.Group();
+    const coastlineMat = new THREE.LineBasicMaterial({
+      color: 0x2a5a8c,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.7,
     });
-    globeGroup.add(new THREE.Mesh(wireGeom, wireMat));
+    for (const continent of allCoastlines) {
+      const points: THREE.Vector3[] = continent.coords.map(
+        ([lng, lat]) => latLngToVector3(lat, lng, RADIUS * 1.002),
+      );
+      if (points.length > 1) {
+        const geom = new THREE.BufferGeometry().setFromPoints(points);
+        coastlineGroup.add(new THREE.Line(geom, coastlineMat));
+      }
+    }
+    globeGroup.add(coastlineGroup);
 
     // Grid lines (latitude/longitude)
     const gridGroup = new THREE.Group();
-    const gridMat = new THREE.LineBasicMaterial({ color: 0x1a3a5c, transparent: true, opacity: 0.2 });
+    const gridMat = new THREE.LineBasicMaterial({ color: 0x1a3a5c, transparent: true, opacity: 0.08 });
 
     // Latitude lines
     for (let lat = -60; lat <= 60; lat += 30) {

@@ -5,9 +5,10 @@ interface Props {
   onToggle: () => void;
   activeLanes: Set<string>;
   onToggleLane: (laneId: string) => void;
+  onOpenComparison: () => void;
 }
 
-export default function LaneToggle({ lanesEnabled, onToggle, activeLanes, onToggleLane }: Props) {
+export default function LaneToggle({ lanesEnabled, onToggle, activeLanes, onToggleLane, onOpenComparison }: Props) {
   return (
     <div style={{
       position: 'absolute',
@@ -39,6 +40,23 @@ export default function LaneToggle({ lanesEnabled, onToggle, activeLanes, onTogg
         }}
       >
         {lanesEnabled ? '↕ Lanes ON' : '↕ Compare Regions'}
+      </button>
+
+      <button
+        onClick={onOpenComparison}
+        style={{
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 8,
+          padding: '4px 10px',
+          color: '#ffffff80',
+          fontSize: 11,
+          cursor: 'pointer',
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        ⚖️ Full Compare
       </button>
 
       {lanesEnabled && (

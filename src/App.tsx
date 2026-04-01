@@ -13,9 +13,11 @@ import InsightsPanel from './components/InsightsPanel';
 import TourOverlay from './components/TourOverlay';
 import LaneToggle from './components/LaneToggle';
 
-// Lazy-loaded heavy components (Three.js globe, chat panel)
+// Lazy-loaded heavy components (Three.js globe, chat panel, comparison)
 const GlobePanel = lazy(() => import('./components/GlobePanel'));
 const ChatPanel = lazy(() => import('./components/ChatPanel'));
+const ComparisonView = lazy(() => import('./components/ComparisonView'));
+const ClassroomMode = lazy(() => import('./components/ClassroomMode'));
 import { REGION_LANES } from './data/regions';
 import './App.css';
 
@@ -33,6 +35,8 @@ export default function App() {
   const [voice, setVoice] = useState(false);
   const [cacheStats, setCacheStats] = useState({ cells: 0, events: 0 });
   const [showGlobe, setShowGlobe] = useState(true);
+  const [showComparison, setShowComparison] = useState(false);
+  const [showClassroom, setShowClassroom] = useState(false);
   const [lanesEnabled, setLanesEnabled] = useState(false);
   const [activeLanes, setActiveLanes] = useState<Set<string>>(
     new Set(REGION_LANES.map(l => l.id))
@@ -291,6 +295,7 @@ export default function App() {
             return next;
           });
         }}
+        onOpenComparison={() => setShowComparison(true)}
       />
 
       {/* Zoom level + discovery status + voice toggle */}
@@ -380,6 +385,53 @@ export default function App() {
           onClose={closeTour}
         />
       )}
+
+      {/* Comparison view */}
+      {showComparison && (
+        <Suspense fallback={null}>
+          <ComparisonView
+            viewport={viewport}
+            events={allEvents}
+            onClose={() => setShowComparison(false)}
+            onSelectEvent={setSelectedEvent}
+          />
+        </Suspense>
+      )}
+
+      {/* Classroom mode */}
+      {showClassroom && (
+        <Suspense fallback={null}>
+          <ClassroomMode
+            viewport={viewport}
+            onNavigate={(y, s) => animateTo(y, s)}
+            onClose={() => setShowClassroom(false)}
+          />
+        </Suspense>
+      )}
+
+      {/* Classroom button */}
+      <button
+        onClick={() => setShowClassroom(true)}
+        style={{
+          position: 'absolute',
+          bottom: 20,
+          left: '50%',
+          transform: 'translateX(calc(-50% + 180px))',
+          background: 'rgba(13, 17, 23, 0.9)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 14,
+          padding: '6px 14px',
+          color: '#ffffff80',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+          backdropFilter: 'blur(10px)',
+          zIndex: 20,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        🎓 Classroom
+      </button>
     </div>
   );
 }
