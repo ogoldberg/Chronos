@@ -36,39 +36,54 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
     }
   }, [event.wiki, event.title, event.year]);
 
+  const [imgLoaded, setImgLoaded] = useState(false);
+
   return (
     <div style={{
       position: 'absolute',
       top: '50%',
       left: '50%',
       transform: 'translate(-50%, -50%)',
-      background: 'rgba(13, 17, 23, 0.95)',
-      border: `1px solid ${event.color}40`,
-      borderRadius: 16,
+      background: 'rgba(10, 13, 20, 0.96)',
+      border: `1px solid ${event.color}30`,
+      borderRadius: 18,
       padding: 0,
       maxWidth: 480,
       width: '90vw',
       maxHeight: '80vh',
       overflow: 'hidden',
+      overflowY: 'auto',
       zIndex: 100,
-      backdropFilter: 'blur(20px)',
-      boxShadow: `0 0 40px ${event.color}20, 0 20px 60px rgba(0,0,0,0.5)`,
+      backdropFilter: 'blur(24px)',
+      boxShadow: `0 0 60px ${event.color}15, 0 24px 80px rgba(0,0,0,0.6)`,
+      animation: 'modalSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
     }}>
-      {/* Header image — prefer event's own image, fall back to Wikipedia */}
+      {/* Header image with shimmer loading state */}
       {(event.imageUrl || wiki?.thumb) && (
         <div style={{
           width: '100%',
-          height: 180,
+          height: 200,
           overflow: 'hidden',
           position: 'relative',
+          background: '#0d1117',
         }}>
+          {/* Shimmer placeholder while image loads */}
+          {!imgLoaded && (
+            <div className="image-loading" style={{
+              position: 'absolute',
+              inset: 0,
+            }} />
+          )}
           <img
             src={event.imageUrl || wiki?.thumb}
             alt={event.title}
+            onLoad={() => setImgLoaded(true)}
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'cover',
+              opacity: imgLoaded ? 1 : 0,
+              transition: 'opacity 0.4s ease',
             }}
           />
           <div style={{
@@ -235,17 +250,16 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
-        {/* Video embed */}
+        {/* Video — integrated with visual context */}
         {event.videoUrl && (
           <div style={{
             marginBottom: 16,
-            borderRadius: 10,
+            borderRadius: 12,
             overflow: 'hidden',
-            background: 'rgba(255,255,255,0.04)',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))',
+            border: '1px solid rgba(255,255,255,0.04)',
+            transition: 'border-color 0.2s',
           }}>
-            <div style={{ fontSize: 10, color: '#ffffff50', fontWeight: 600, letterSpacing: 1, padding: '10px 14px 0' }}>
-              VIDEO
-            </div>
             <a
               href={event.videoUrl}
               target="_blank"
@@ -253,32 +267,67 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
-                padding: '10px 14px',
-                color: '#ffffffcc',
+                gap: 10,
+                padding: '14px 16px',
+                color: '#ffffffdd',
                 textDecoration: 'none',
                 fontSize: 13,
               }}
             >
-              ▶️ Watch video
-              {event.mediaCaption && <span style={{ color: '#ffffff60', fontSize: 11 }}>— {event.mediaCaption}</span>}
+              <span style={{
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                background: `${event.color}20`,
+                border: `1px solid ${event.color}40`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 16,
+                flexShrink: 0,
+              }}>▶</span>
+              <div>
+                <div style={{ fontWeight: 500 }}>Watch video</div>
+                {event.mediaCaption && (
+                  <div style={{ color: '#ffffff50', fontSize: 11, marginTop: 2 }}>{event.mediaCaption}</div>
+                )}
+              </div>
+              <span style={{ marginLeft: 'auto', color: '#ffffff30', fontSize: 11 }}>↗</span>
             </a>
           </div>
         )}
 
-        {/* Audio */}
+        {/* Audio — styled player */}
         {event.audioUrl && (
           <div style={{
             marginBottom: 16,
-            borderRadius: 10,
+            borderRadius: 12,
             overflow: 'hidden',
-            background: 'rgba(255,255,255,0.04)',
-            padding: 14,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))',
+            border: '1px solid rgba(255,255,255,0.04)',
+            padding: '12px 16px',
           }}>
-            <div style={{ fontSize: 10, color: '#ffffff50', fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>
-              AUDIO
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 10,
+            }}>
+              <span style={{ fontSize: 14 }}>🎧</span>
+              <span style={{ fontSize: 10, color: '#ffffff40', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+                Audio
+              </span>
             </div>
-            <audio controls src={event.audioUrl} style={{ width: '100%', height: 32 }} />
+            <audio
+              controls
+              src={event.audioUrl}
+              style={{
+                width: '100%',
+                height: 36,
+                borderRadius: 8,
+                filter: 'invert(1) hue-rotate(180deg) brightness(0.85)',
+              }}
+            />
           </div>
         )}
 
