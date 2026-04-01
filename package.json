@@ -9,6 +9,8 @@
     "start": "node --import tsx server/production.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "seed": "node --import tsx server/seed.ts",
+    "seed:dry": "node --import tsx server/seed.ts --dry-run",
     "lint": "eslint .",
     "preview": "vite preview"
   },
