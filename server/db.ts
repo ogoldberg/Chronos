@@ -92,6 +92,36 @@ CREATE INDEX IF NOT EXISTS idx_conn_source ON event_connections (source_id);
 CREATE INDEX IF NOT EXISTS idx_conn_target ON event_connections (target_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_conn_pair ON event_connections (source_id, target_id, type);
 
+-- User progress and game stats
+CREATE TABLE IF NOT EXISTS user_progress (
+  user_id         TEXT PRIMARY KEY,
+  xp              INTEGER DEFAULT 0,
+  level           INTEGER DEFAULT 1,
+  events_viewed   INTEGER DEFAULT 0,
+  eras_explored   JSONB DEFAULT '[]',
+  quiz_streak     INTEGER DEFAULT 0,
+  best_streak     INTEGER DEFAULT 0,
+  achievements    JSONB DEFAULT '[]',
+  total_correct   INTEGER DEFAULT 0,
+  total_attempted INTEGER DEFAULT 0,
+  myths_revealed  INTEGER DEFAULT 0,
+  bookmarks       JSONB DEFAULT '[]',
+  annotations     JSONB DEFAULT '{}',
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User custom events and annotations
+CREATE TABLE IF NOT EXISTS user_annotations (
+  id              SERIAL PRIMARY KEY,
+  user_id         TEXT NOT NULL,
+  event_id        TEXT,
+  note            TEXT,
+  is_bookmark     BOOLEAN DEFAULT FALSE,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_annotations_user ON user_annotations (user_id);
+
 -- Primary query: "give me events in year range at zoom level"
 CREATE INDEX IF NOT EXISTS idx_events_year ON events (year);
 CREATE INDEX IF NOT EXISTS idx_events_year_category ON events (year, category);
@@ -300,4 +330,36 @@ export async function getNearbyEvents(
     [lat, lng, radiusDeg, limit],
   );
   return result.rows;
+}
+
+// ─── User Progress ───
+
+export async function getUserProgress(userId: string) {
+  const db = getPool();
+  const result = await db.query('SELECT * FROM user_progress WHERE user_id = $1', [userId]);
+  return result.rows[0] || null;
+}
+
+export async function saveUserProgress(userId: string, progress: Record<string, any>) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO user_progress (user_id, xp, level, events_viewed, eras_explored, quiz_streak, best_streak, achievements, total_correct, total_attempted, myths_revealed, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET
+       xp = EXCLUDED.xp, level = EXCLUDED.level,
+       events_viewed = EXCLUDED.events_viewed, eras_explored = EXCLUDED.eras_explored,
+       quiz_streak = EXCLUDED.quiz_streak, best_streak = EXCLUDED.best_streak,
+       achievements = EXCLUDED.achievements,
+       total_correct = EXCLUDED.total_correct, total_attempted = EXCLUDED.total_attempted,
+       myths_revealed = EXCLUDED.myths_revealed, updated_at = NOW()`,
+    [
+      userId,
+      progress.xp ?? 0, progress.level ?? 1,
+      progress.eventsViewed ?? 0, JSON.stringify(progress.erasExplored ?? []),
+      progress.quizStreak ?? 0, progress.bestStreak ?? 0,
+      JSON.stringify(progress.achievements ?? []),
+      progress.totalCorrect ?? 0, progress.totalAttempted ?? 0,
+      progress.mythsRevealed ?? 0,
+    ],
+  );
 }

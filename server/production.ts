@@ -12,6 +12,8 @@ import { fileURLToPath } from 'url';
 import { handleApiRequest, handleStreamRequest, setDbReady } from './api';
 import { getProvider } from './providers/index';
 import { initDB } from './db';
+import { initAuth, getAuth } from './auth';
+import { toNodeHandler } from 'better-auth/node';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -20,8 +22,9 @@ const STATIC_DIR = path.resolve(__dirname, '..', 'dist');
 async function main() {
   const app = express();
 
-  // Init AI provider
+  // Init AI provider + auth
   getProvider();
+  initAuth();
 
   // Init DB (optional)
   if (process.env.DATABASE_URL) {
@@ -34,6 +37,12 @@ async function main() {
     }
   } else {
     console.log('[CHRONOS] No DATABASE_URL — in-memory cache only');
+  }
+
+  // Better Auth routes — must come before body parser
+  const authInstance = getAuth();
+  if (authInstance) {
+    app.all('/api/auth/*', toNodeHandler(authInstance));
   }
 
   // JSON body parser for API routes
