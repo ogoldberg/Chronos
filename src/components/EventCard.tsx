@@ -4,6 +4,7 @@ import { formatYear } from '../utils/format';
 import { getShareURL } from '../utils/urlState';
 import { fetchWikiSummary } from '../services/wikipediaApi';
 import { searchWikisource, type SourceDocument } from '../services/wikisourceApi';
+import { factCheckEvent, type FactCheckResult } from '../services/factCheck';
 
 interface Props {
   event: TimelineEvent;
@@ -15,6 +16,7 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [wiki, setWiki] = useState<WikiData | null>(null);
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<SourceDocument[]>([]);
+  const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null);
 
   useEffect(() => {
     if (event.wiki) {
@@ -23,6 +25,10 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         setWiki(data);
         setLoading(false);
       });
+    }
+    // Fact-check discovered events (anchors are trusted)
+    if (event.source === 'discovered') {
+      factCheckEvent(event.title, event.year, event.description).then(setFactCheck);
     }
     // Search for primary sources
     if (event.year > -3000) {
@@ -140,11 +146,59 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         }}>
           {event.source === 'anchor' ? 'CURATED' : 'AI + WEB SEARCH'}
         </div>
+        {/* Fact-check badge for discovered events */}
+        {factCheck && (
+          <div style={{
+            display: 'inline-block',
+            padding: '2px 8px',
+            borderRadius: 10,
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            marginBottom: 12,
+            marginLeft: 6,
+            background: factCheck.verified
+              ? factCheck.confidence >= 0.8 ? '#22c55e20' : '#eab30820'
+              : '#ef444420',
+            color: factCheck.verified
+              ? factCheck.confidence >= 0.8 ? '#22c55e' : '#eab308'
+              : '#ef4444',
+            border: `1px solid ${factCheck.verified
+              ? factCheck.confidence >= 0.8 ? '#22c55e40' : '#eab30840'
+              : '#ef444440'}`,
+          }}>
+            {factCheck.verified
+              ? factCheck.confidence >= 0.8 ? '✓ VERIFIED' : '~ LIKELY'
+              : '? UNVERIFIED'}
+          </div>
+        )}
 
         {/* Description */}
         <p style={{ color: '#ffffffcc', lineHeight: 1.6, margin: '0 0 16px', fontSize: 14 }}>
           {event.description}
         </p>
+
+        {/* Fact-check details */}
+        {factCheck?.details && (
+          <div style={{
+            fontSize: 11,
+            color: factCheck.verified ? '#22c55e99' : '#ef444499',
+            marginBottom: 12,
+            fontStyle: 'italic',
+          }}>
+            {factCheck.details}
+            {factCheck.wikidataId && (
+              <a
+                href={`https://www.wikidata.org/wiki/${factCheck.wikidataId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#3b82f6', marginLeft: 6, textDecoration: 'none' }}
+              >
+                Wikidata ↗
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Wikipedia content */}
         {loading && (

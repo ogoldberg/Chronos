@@ -1,6 +1,8 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import type { TimelineEvent } from '../types';
+import { EMPIRES } from '../data/empires';
+import type { Empire } from '../data/empires';
 
 interface Props {
   events: TimelineEvent[];
@@ -8,6 +10,7 @@ interface Props {
   hoveredEvent: TimelineEvent | null;
   isCosmicScale: boolean;
   onClose: () => void;
+  currentYear?: number;
 }
 
 // Convert lat/lng to 3D position on sphere
@@ -42,6 +45,76 @@ function createArc(
     points.push(point);
   }
   return points;
+}
+
+// Build a filled polygon mesh on the globe surface from [lat,lng] points.
+// Uses a simple triangle-fan from the centroid, projected onto the sphere.
+function buildEmpireMesh(
+  empire: Empire,
+  radius: number,
+): THREE.Mesh {
+  const pts = empire.polygon;
+  // Compute centroid in lat/lng space
+  let cLat = 0;
+  let cLng = 0;
+  for (const [lat, lng] of pts) {
+    cLat += lat;
+    cLng += lng;
+  }
+  cLat /= pts.length;
+  cLng /= pts.length;
+
+  const r = radius * 1.004; // Slightly above surface to avoid z-fighting
+  const center = latLngToVector3(cLat, cLng, r);
+
+  // Build triangle fan: center -> p[i] -> p[i+1]
+  const positions: number[] = [];
+
+  for (let i = 0; i < pts.length; i++) {
+    const next = (i + 1) % pts.length;
+    const v0 = center;
+    const v1 = latLngToVector3(pts[i][0], pts[i][1], r);
+    const v2 = latLngToVector3(pts[next][0], pts[next][1], r);
+
+    positions.push(v0.x, v0.y, v0.z);
+    positions.push(v1.x, v1.y, v1.z);
+    positions.push(v2.x, v2.y, v2.z);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+
+  const color = new THREE.Color(empire.color);
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.20,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+
+  return new THREE.Mesh(geometry, material);
+}
+
+// Build a border outline for an empire polygon
+function buildEmpireBorder(
+  empire: Empire,
+  radius: number,
+): THREE.Line {
+  const r = radius * 1.005;
+  const points = empire.polygon.map(([lat, lng]) => latLngToVector3(lat, lng, r));
+  // Close the loop
+  if (points.length > 0) {
+    points.push(points[0].clone());
+  }
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineBasicMaterial({
+    color: new THREE.Color(empire.color),
+    transparent: true,
+    opacity: 0.6,
+  });
+  return new THREE.Line(geometry, material);
 }
 
 // Vertex shader for the atmosphere
