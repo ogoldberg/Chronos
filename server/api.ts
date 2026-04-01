@@ -2,7 +2,7 @@ import type { Plugin } from 'vite';
 import { getProvider, getProviderConfig, setProvider } from './providers/index';
 import type { AIProviderConfig } from './providers/index';
 import { initDB, upsertEvents, getEventsInRange } from './db';
-import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM } from './prompts';
+import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM, PARALLELS_SYSTEM } from './prompts';
 
 let dbReady = false;
 
@@ -169,6 +169,46 @@ export async function handleApiRequest(
       catch { /* fall through */ }
     }
     return { status: 200, data: { insights: [] } };
+  }
+
+  // POST /api/parallels
+  if (method === 'POST' && url === '/api/parallels') {
+    if (!checkRateLimit('parallels')) {
+      return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
+    }
+    const { query, context } = body;
+    if (!query || typeof query !== 'string' || !query.trim()) {
+      return { status: 400, data: { error: 'A query string is required.' } };
+    }
+
+    const system = PARALLELS_SYSTEM(query.trim(), context);
+    const resp = await ai.chat(system, [
+      { role: 'user', content: `Find historical parallels for: "${query.trim()}"` },
+    ], { maxTokens: 3000, webSearch: true });
+
+    // Try to extract the JSON object with events
+    const jsonObjMatch = resp.text.match(/\{[\s\S]*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
+    if (jsonObjMatch) {
+      try {
+        const parsed = JSON.parse(jsonObjMatch[0]);
+        if (Array.isArray(parsed.events)) {
+          return { status: 200, data: { events: parsed.events } };
+        }
+      } catch { /* fall through to array match */ }
+    }
+
+    // Fallback: try to extract a bare JSON array
+    const jsonArrMatch = resp.text.match(/\[[\s\S]*\]/);
+    if (jsonArrMatch) {
+      try {
+        const events = JSON.parse(jsonArrMatch[0]);
+        if (Array.isArray(events)) {
+          return { status: 200, data: { events } };
+        }
+      } catch { /* fall through */ }
+    }
+
+    return { status: 200, data: { events: [] } };
   }
 
   // POST /api/chat
