@@ -58,7 +58,7 @@ export default function VoiceButton({ onFinalTranscript, disabled }: Props) {
           finalBufferRef.current += (finalBufferRef.current ? ' ' : '') + text;
           setInterim('');
 
-          // Auto-send after 1.5s of silence
+          // Auto-send after 2.5s of silence (generous pause for mid-thought)
           clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = window.setTimeout(() => {
             if (finalBufferRef.current.trim()) {
@@ -67,7 +67,7 @@ export default function VoiceButton({ onFinalTranscript, disabled }: Props) {
               onFinalTranscript(finalBufferRef.current.trim());
               finalBufferRef.current = '';
             }
-          }, 1500);
+          }, 2500);
         } else {
           setInterim(text);
           // Reset silence timer on any speech activity
@@ -94,7 +94,7 @@ export default function VoiceButton({ onFinalTranscript, disabled }: Props) {
           position: 'absolute',
           bottom: '100%',
           left: 0,
-          right: -200,
+          right: 0,
           marginBottom: 8,
           background: 'rgba(13, 17, 23, 0.95)',
           border: '1px solid rgba(59, 130, 246, 0.3)',

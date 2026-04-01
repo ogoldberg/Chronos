@@ -398,17 +398,20 @@ export function renderTimeline(
       const target = hitMap.get(conn.targetId) || titleMap.get(conn.targetTitle || '');
       if (!target) continue;
 
-      const opacity = isActiveEvent ? '60' : '20';
-      const lineWidth = isActiveEvent ? 2 : 1;
+      // Only render arcs for selected/hovered event to avoid visual clutter
+      if (!isActiveEvent) continue;
 
-      // Draw curved arc
-      ctx.strokeStyle = ev.color + opacity;
+      const lineWidth = 2;
+
+      // Draw curved arc — offset scales with horizontal distance
+      ctx.strokeStyle = ev.color + '60';
       ctx.lineWidth = lineWidth;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
 
       const midX = (ht.x + target.x) / 2;
-      const midY = Math.min(ht.y, target.y) - 30; // arc above events
+      const arcHeight = Math.max(30, Math.abs(target.x - ht.x) * 0.15);
+      const midY = Math.min(ht.y, target.y) - arcHeight;
       ctx.moveTo(ht.x, ht.y);
       ctx.quadraticCurveTo(midX, midY, target.x, target.y);
       ctx.stroke();
