@@ -292,6 +292,22 @@ export default function App() {
 
       <StatsBar />
       <AchievementToast />
+
+      {/* "Show me around" button — visible when help overlay is open */}
+      {activePanel === 'help' && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, calc(-50% + 140px))',
+          zIndex: 2001,
+        }}>
+          <ShowMeAroundButton onClick={() => { closePanel(); triggerOnboarding(); }} />
+        </div>
+      )}
+
+      {/* Onboarding overlay — not lazy, shows on first visit */}
+      <OnboardingOverlay />
     </div>
   );
 }
