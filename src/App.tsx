@@ -22,6 +22,7 @@ const CurrentEvents = lazy(() => import('./components/CurrentEvents'));
 const MythBuster = lazy(() => import('./components/MythBuster'));
 const QuizPanel = lazy(() => import('./components/QuizPanel'));
 const AuthPanel = lazy(() => import('./components/AuthPanel'));
+const LensExplorer = lazy(() => import('./components/LensExplorer'));
 import StatsBar from './components/StatsBar';
 import AchievementToast from './components/AchievementToast';
 import { recordEventView } from './services/gamification';
@@ -48,6 +49,8 @@ export default function App() {
   const [showMyths, setShowMyths] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showLenses, setShowLenses] = useState(false);
+  const [activeLens, setActiveLens] = useState<{ name: string; emoji: string; color: string } | null>(null);
   const [lanesEnabled, setLanesEnabled] = useState(false);
   const [activeLanes, setActiveLanes] = useState<Set<string>>(
     new Set(REGION_LANES.map(l => l.id))
@@ -498,6 +501,7 @@ export default function App() {
         {toolBtnStyle('🔍 Myth Buster', () => setShowMyths(true))}
         {toolBtnStyle('🧠 Quiz', () => setShowQuiz(true))}
         {toolBtnStyle('🎓 Classroom', () => setShowClassroom(true))}
+        {toolBtnStyle('🔬 Lenses', () => setShowLenses(true))}
         {toolBtnStyle('👤 Account', () => setShowAuth(true))}
       </div>
 
@@ -521,6 +525,45 @@ export default function App() {
             era={scaleLabel(viewport.span)}
           />
         </Suspense>
+      )}
+
+      {/* Knowledge Lenses */}
+      {showLenses && (
+        <Suspense fallback={null}>
+          <LensExplorer
+            onActivateLens={(lens) => { setActiveLens({ name: lens.name, emoji: lens.emoji, color: lens.color }); setShowLenses(false); }}
+            onDeactivateLens={() => setActiveLens(null)}
+            onClose={() => setShowLenses(false)}
+          />
+        </Suspense>
+      )}
+
+      {/* Active lens banner */}
+      {activeLens && (
+        <div style={{
+          position: 'absolute',
+          top: 50,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: `linear-gradient(90deg, ${activeLens.color}20, ${activeLens.color}10)`,
+          border: `1px solid ${activeLens.color}30`,
+          borderRadius: 12,
+          padding: '6px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          zIndex: 20,
+          backdropFilter: 'blur(10px)',
+        }}>
+          <span>{activeLens.emoji}</span>
+          <span style={{ color: activeLens.color, fontSize: 12, fontWeight: 600 }}>{activeLens.name}</span>
+          <button
+            onClick={() => setActiveLens(null)}
+            style={{ background: 'none', border: 'none', color: '#ffffff40', cursor: 'pointer', fontSize: 14, marginLeft: 4 }}
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {/* Auth */}

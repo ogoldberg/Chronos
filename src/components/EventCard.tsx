@@ -5,6 +5,8 @@ import { getShareURL } from '../utils/urlState';
 import { fetchWikiSummary } from '../services/wikipediaApi';
 import { searchWikisource, type SourceDocument } from '../services/wikisourceApi';
 import { factCheckEvent, type FactCheckResult } from '../services/factCheck';
+import { verifyCitations } from '../services/citationVerifier';
+import type { Citation } from '../types';
 
 interface Props {
   event: TimelineEvent;
@@ -17,6 +19,7 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<SourceDocument[]>([]);
   const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null);
+  const [verifiedCitations, setVerifiedCitations] = useState<Citation[]>([]);
 
   useEffect(() => {
     if (event.wiki) {
@@ -26,6 +29,8 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         setLoading(false);
       });
     }
+    // Verify citations — construct real URLs, check they exist
+    verifyCitations(event.citations, event.wiki).then(setVerifiedCitations);
     // Fact-check discovered events (anchors are trusted)
     if (event.source === 'discovered') {
       factCheckEvent(event.title, event.year, event.description).then(setFactCheck);
@@ -231,15 +236,15 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
-        {/* Citations */}
-        {event.citations && event.citations.length > 0 && (
+        {/* Citations — verified with real URLs */}
+        {verifiedCitations.length > 0 && (
           <div style={{
             marginBottom: 12,
             fontSize: 11,
             color: '#ffffff50',
           }}>
             <span style={{ fontWeight: 600, letterSpacing: 0.5 }}>Sources: </span>
-            {event.citations.map((cite, i) => (
+            {verifiedCitations.map((cite, i) => (
               <span key={i}>
                 {i > 0 && ' · '}
                 {cite.url ? (
