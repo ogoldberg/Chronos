@@ -6,7 +6,7 @@
  * and never re-requested. Adjacent cells are prefetched.
  */
 
-import type { TimelineEvent } from '../types';
+import type { TimelineEvent } from '../../types';
 
 // Zoom tiers define the grid cell sizes and event counts
 // Each tier activates when viewport span <= maxSpan

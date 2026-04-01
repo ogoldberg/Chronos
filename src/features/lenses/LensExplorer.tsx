@@ -4,7 +4,7 @@ import {
   THEMATIC_LENSES,
   createCustomLens,
   type KnowledgeLens,
-} from '../data/lenses';
+} from '../../data/lenses';
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */

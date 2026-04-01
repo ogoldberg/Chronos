@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import type { HistoricalMyth } from '../data/myths';
-import { MYTHS } from '../data/myths';
+import type { HistoricalMyth } from '../../data/myths';
+import { MYTHS } from '../../data/myths';
 
 interface Props {
   onNavigate?: (year: number, span: number) => void;
@@ -63,7 +63,7 @@ export default function MythBuster({ onNavigate, onAskAI, onClose, centerYear, s
   const handleReveal = useCallback(() => {
     setRevealed(true);
     // Award XP for revealing a myth
-    import('../services/gamification').then(g => g.recordMythRevealed());
+    import('../gamification/gamification').then(g => g.recordMythRevealed());
   }, []);
 
   const handleCategoryChange = useCallback((cat: string) => {

@@ -6,22 +6,22 @@ import { scaleLabel } from '../utils/format';
 import { getVisibleRange } from '../canvas/viewport';
 
 // Lazy-loaded panels
-const ChatPanel = lazy(() => import('./ChatPanel'));
-const ComparisonView = lazy(() => import('./ComparisonView'));
-const ClassroomMode = lazy(() => import('./ClassroomMode'));
-const CurrentEvents = lazy(() => import('./CurrentEvents'));
-const MythBuster = lazy(() => import('./MythBuster'));
-const QuizPanel = lazy(() => import('./QuizPanel'));
-const LensExplorer = lazy(() => import('./LensExplorer'));
-const AuthPanel = lazy(() => import('./AuthPanel'));
-const SearchPanel = lazy(() => import('./SearchPanel'));
-const WhatIfPanel = lazy(() => import('./WhatIfPanel'));
-const PersonalTimeline = lazy(() => import('./PersonalTimeline'));
-const ExportPanel = lazy(() => import('./ExportPanel'));
-const TimeLapse = lazy(() => import('./TimeLapse'));
-const DebatePanel = lazy(() => import('./DebatePanel'));
-const CommunityHub = lazy(() => import('./CommunityHub'));
-const DataOverlays = lazy(() => import('./DataOverlays'));
+const ChatPanel = lazy(() => import('../features/chat/ChatPanel'));
+const ComparisonView = lazy(() => import('../features/comparison/ComparisonView'));
+const ClassroomMode = lazy(() => import('../features/classroom/ClassroomMode'));
+const CurrentEvents = lazy(() => import('../features/parallels/CurrentEvents'));
+const MythBuster = lazy(() => import('../features/myths/MythBuster'));
+const QuizPanel = lazy(() => import('../features/gamification/QuizPanel'));
+const LensExplorer = lazy(() => import('../features/lenses/LensExplorer'));
+const AuthPanel = lazy(() => import('../features/auth/AuthPanel'));
+const SearchPanel = lazy(() => import('../features/search/SearchPanel'));
+const WhatIfPanel = lazy(() => import('../features/whatif/WhatIfPanel'));
+const PersonalTimeline = lazy(() => import('../features/personal/PersonalTimeline'));
+const ExportPanel = lazy(() => import('../features/export/ExportPanel'));
+const TimeLapse = lazy(() => import('../features/timelapse/TimeLapse'));
+const DebatePanel = lazy(() => import('../features/debate/DebatePanel'));
+const CommunityHub = lazy(() => import('../features/community/CommunityHub'));
+const DataOverlays = lazy(() => import('../features/overlays/DataOverlays'));
 
 export default function PanelRouter() {
   const activePanel = useUIStore(s => s.activePanel);

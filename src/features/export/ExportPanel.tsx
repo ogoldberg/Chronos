@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import type { TimelineEvent, Viewport } from '../types';
+import type { TimelineEvent, Viewport } from '../../types';
 import {
   exportCanvasImage,
   downloadBlob,
   exportEventsJSON,
   generateEmbedSnippet,
   copyToClipboard,
-} from '../utils/export';
-import { formatYear } from '../utils/format';
+} from '../../utils/export';
+import { formatYear } from '../../utils/format';
 
 interface Props {
   viewport: Viewport;

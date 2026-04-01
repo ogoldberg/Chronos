@@ -6,8 +6,8 @@ import {
   subscribe,
   ACHIEVEMENTS,
   LEVEL_THRESHOLDS,
-} from '../services/gamification';
-import type { PlayerStats } from '../services/gamification';
+} from './gamification';
+import type { PlayerStats } from './gamification';
 
 export default function StatsBar() {
   const [stats, setStats] = useState<PlayerStats>(getStats);

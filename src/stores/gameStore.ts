@@ -6,7 +6,7 @@ import {
   recordMythRevealed,
   subscribe,
   type PlayerStats,
-} from '../services/gamification';
+} from '../features/gamification/gamification';
 
 interface GameState {
   stats: PlayerStats;

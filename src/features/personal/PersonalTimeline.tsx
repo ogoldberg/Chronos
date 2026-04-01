@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { TimelineEvent } from '../types';
+import type { TimelineEvent } from '../../types';
 
 const STORAGE_KEY = 'chronos_personal_events';
 

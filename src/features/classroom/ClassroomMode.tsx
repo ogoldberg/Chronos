@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import type { TourStop, Viewport } from '../types';
-import { formatYear } from '../utils/format';
-import { speak, stopSpeech } from '../utils/speech';
+import type { TourStop, Viewport } from '../../types';
+import { formatYear } from '../../utils/format';
+import { speak, stopSpeech } from '../../utils/speech';
 
 interface Props {
   viewport: Viewport;

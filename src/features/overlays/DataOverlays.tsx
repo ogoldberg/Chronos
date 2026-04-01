@@ -5,9 +5,9 @@ import {
   CO2_CONCENTRATION,
   GDP_ESTIMATES,
   type DataPoint,
-} from '../data/climateData';
-import { useTimelineStore } from '../stores/timelineStore';
-import { getVisibleRange } from '../canvas/viewport';
+} from '../../data/climateData';
+import { useTimelineStore } from '../../stores/timelineStore';
+import { getVisibleRange } from '../../canvas/viewport';
 
 /* ------------------------------------------------------------------ */
 /*  Overlay config                                                     */

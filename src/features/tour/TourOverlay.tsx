@@ -1,4 +1,4 @@
-import type { TourStop } from '../types';
+import type { TourStop } from '../../types';
 
 interface Props {
   stops: TourStop[];

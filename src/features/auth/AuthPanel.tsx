@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { signIn, signUp, signOut, useSession } from '../services/authClient';
+import { signIn, signUp, signOut, useSession } from './authClient';
 
 interface Props {
   onClose: () => void;

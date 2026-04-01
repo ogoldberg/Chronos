@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Viewport, TimelineEvent } from '../types';
-import { formatYear, formatYearShort } from '../utils/format';
-import { yearToPixel } from '../canvas/viewport';
-import { REGION_LANES, matchEventToRegion } from '../data/regions';
+import type { Viewport, TimelineEvent } from '../../types';
+import { formatYear, formatYearShort } from '../../utils/format';
+import { yearToPixel } from '../../canvas/viewport';
+import { REGION_LANES, matchEventToRegion } from '../../data/regions';
 
 interface Props {
   viewport: Viewport;

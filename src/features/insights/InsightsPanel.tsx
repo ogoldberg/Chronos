@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Viewport, TimelineEvent } from '../types';
-import { formatYear, scaleLabel } from '../utils/format';
+import type { Viewport, TimelineEvent } from '../../types';
+import { formatYear, scaleLabel } from '../../utils/format';
 
 interface Props {
   viewport: Viewport;

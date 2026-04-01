@@ -1,4 +1,4 @@
-import { REGION_LANES } from '../data/regions';
+import { REGION_LANES } from '../../data/regions';
 
 interface Props {
   lanesEnabled: boolean;

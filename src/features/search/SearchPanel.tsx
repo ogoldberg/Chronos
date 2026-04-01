@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { TimelineEvent } from '../types';
-import { formatYear } from '../utils/format';
-import { ANCHOR_EVENTS } from '../data/anchorEvents';
+import type { TimelineEvent } from '../../types';
+import { formatYear } from '../../utils/format';
+import { ANCHOR_EVENTS } from '../../data/anchorEvents';
 
 interface SearchResult {
   id: string;

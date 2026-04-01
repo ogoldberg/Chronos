@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { ChatMessage, Viewport, TimelineEvent, TourStop } from '../types';
-import { formatYear, formatYearShort, scaleLabel } from '../utils/format';
-import { speak, stopSpeech, isSpeaking } from '../utils/speech';
-import VoiceButton from './VoiceButton';
+import type { ChatMessage, Viewport, TimelineEvent, TourStop } from '../../types';
+import { formatYear, formatYearShort, scaleLabel } from '../../utils/format';
+import { speak, stopSpeech, isSpeaking } from '../../utils/speech';
+import VoiceButton from '../../components/VoiceButton';
 
 interface Props {
   viewport: Viewport;

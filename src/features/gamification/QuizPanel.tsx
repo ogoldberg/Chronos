@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { recordQuizAnswer, getStats } from '../services/gamification';
+import { recordQuizAnswer, getStats } from './gamification';
 
 interface QuizQuestion {
   question: string;

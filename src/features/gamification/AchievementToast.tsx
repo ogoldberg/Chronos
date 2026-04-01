@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Achievement } from '../services/gamification';
-import { onAchievementUnlocked } from '../services/gamification';
+import type { Achievement } from './gamification';
+import { onAchievementUnlocked } from './gamification';
 
 interface ToastItem {
   id: string;

@@ -2,25 +2,25 @@ import { useCallback, useRef, useEffect, useMemo, Suspense, lazy, useState } fro
 import { ANCHOR_EVENTS } from './data/anchorEvents';
 import { clamp, formatYearShort, scaleLabel } from './utils/format';
 import { getVisibleRange } from './canvas/viewport';
-import { discoverEvents, getCacheStats } from './services/eventDiscovery';
+import { discoverEvents, getCacheStats } from './features/discovery/eventDiscovery';
 import { writeURLState } from './utils/urlState';
-import { recordEventView } from './services/gamification';
+import { recordEventView } from './features/gamification/gamification';
 import { useTimelineStore, getAllEvents } from './stores/timelineStore';
 import { useUIStore } from './stores/uiStore';
 import { useTourStore } from './stores/tourStore';
 import TimelineCanvas from './canvas/TimelineCanvas';
 import EraChips from './components/EraChips';
-import EventCard from './components/EventCard';
-import InsightsPanel from './components/InsightsPanel';
-import TourOverlay from './components/TourOverlay';
-import LaneToggle from './components/LaneToggle';
+import EventCard from './features/events/EventCard';
+import InsightsPanel from './features/insights/InsightsPanel';
+import TourOverlay from './features/tour/TourOverlay';
+import LaneToggle from './features/comparison/LaneToggle';
 import PanelRouter from './components/PanelRouter';
-import StatsBar from './components/StatsBar';
-import AchievementToast from './components/AchievementToast';
+import StatsBar from './features/gamification/StatsBar';
+import AchievementToast from './features/gamification/AchievementToast';
 import type { TimelineEvent } from './types';
 import './App.css';
 
-const GlobePanel = lazy(() => import('./components/GlobePanel'));
+const GlobePanel = lazy(() => import('./features/globe/GlobePanel'));
 
 export default function App() {
   // Store subscriptions

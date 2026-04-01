@@ -1,9 +1,9 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as THREE from 'three';
-import type { TimelineEvent } from '../types';
-import { EMPIRES } from '../data/empires';
-import type { Empire } from '../data/empires';
-import { allCoastlines } from '../data/coastlines';
+import type { TimelineEvent } from '../../types';
+import { EMPIRES } from '../../data/empires';
+import type { Empire } from '../../data/empires';
+import { allCoastlines } from '../../data/coastlines';
 
 interface Props {
   events: TimelineEvent[];
