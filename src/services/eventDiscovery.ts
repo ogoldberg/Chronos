@@ -46,7 +46,13 @@ let activeRequests = 0;
 const MAX_CONCURRENT = 2;
 const fetchQueue: Array<() => void> = [];
 
+const MAX_QUEUE_DEPTH = 6;
+
 function processQueue() {
+  // Drop old queued fetches if user has scrolled away
+  while (fetchQueue.length > MAX_QUEUE_DEPTH) {
+    fetchQueue.shift(); // drop oldest
+  }
   while (activeRequests < MAX_CONCURRENT && fetchQueue.length > 0) {
     const next = fetchQueue.shift();
     next?.();

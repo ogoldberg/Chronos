@@ -38,10 +38,17 @@ function pruneCache() {
   for (const [key] of toRemove) discoveryCache.delete(key);
 }
 
+const MAX_BODY_SIZE = 1024 * 1024; // 1MB
+
 function parseBody(req: any): Promise<any> {
   return new Promise((resolve) => {
     let body = '';
-    req.on('data', (chunk: string) => (body += chunk));
+    let size = 0;
+    req.on('data', (chunk: string) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) { resolve({}); return; }
+      body += chunk;
+    });
     req.on('end', () => {
       try { resolve(JSON.parse(body)); }
       catch { resolve({}); }
@@ -88,7 +95,10 @@ export async function handleApiRequest(
   // POST /api/config — switch provider at runtime (requires ADMIN_KEY env var)
   if (method === 'POST' && url === '/api/config') {
     const adminKey = process.env.ADMIN_KEY;
-    if (adminKey && body.adminKey !== adminKey) {
+    if (!adminKey) {
+      return { status: 403, data: { error: 'ADMIN_KEY not configured — config endpoint disabled' } };
+    }
+    if (body.adminKey !== adminKey) {
       return { status: 403, data: { error: 'Invalid admin key' } };
     }
     const newConfig: AIProviderConfig = {

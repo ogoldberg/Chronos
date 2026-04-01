@@ -120,6 +120,8 @@ export default function App() {
 
   useEffect(() => {
     clearTimeout(discoverTimerRef.current);
+    // Skip discovery during active animation to avoid burst API calls
+    if (animRef.current) return;
     discoverTimerRef.current = window.setTimeout(() => {
       const result = discoverEvents(
         viewport.centerYear,
@@ -128,8 +130,13 @@ export default function App() {
         (newEvents) => {
           setDynamicEvents(prev => {
             const combined = [...prev, ...newEvents];
-            // Cap at 2000 events to prevent memory bloat — evict oldest
-            if (combined.length > 2000) return combined.slice(-2000);
+            // Cap at 2000 events — evict those farthest from current viewport
+            if (combined.length > 2000) {
+              const center = viewport.centerYear;
+              return combined
+                .sort((a, b) => Math.abs(a.year - center) - Math.abs(b.year - center))
+                .slice(0, 2000);
+            }
             return combined;
           });
           setCacheStats(getCacheStats());
