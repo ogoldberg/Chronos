@@ -346,6 +346,7 @@ export default function App() {
           selectedEvent={selectedEvent}
           hoveredEvent={hoveredEvent}
           isCosmicScale={viewport.span > 1e8}
+          currentYear={viewport.centerYear}
           onClose={() => setShowGlobe(false)}
         />
         </Suspense>
