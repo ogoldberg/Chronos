@@ -5,12 +5,12 @@
 import { getProvider } from '../../providers/index';
 import { upsertEvents } from '../../db';
 import { LENS_DISCOVERY_SYSTEM } from '../../prompts';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import type { RouteHandler } from '../index';
 
 export function registerLensRoutes(handleRoute: RouteHandler, dbReady: () => boolean) {
-  handleRoute('POST', '/api/lens/discover', null, async (body) => {
-    if (!checkRateLimit('lens-discover')) {
+  handleRoute('POST', '/api/lens/discover', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('lens-discover', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
     const ai = getProvider();

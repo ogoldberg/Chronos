@@ -17,7 +17,7 @@ import {
   logDiscovery,
 } from '../../db';
 import { DISCOVER_SYSTEM } from '../../prompts';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
 
@@ -51,8 +51,8 @@ function getEraContext(startYear: number): string {
 }
 
 export function registerDiscoverRoutes(handleRoute: RouteHandler, dbReady: () => boolean) {
-  handleRoute('POST', '/api/discover', null, async (body) => {
-    if (!checkRateLimit('discover')) {
+  handleRoute('POST', '/api/discover', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('discover', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
 

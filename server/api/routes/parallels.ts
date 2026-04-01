@@ -4,12 +4,12 @@
 
 import { getProvider } from '../../providers/index';
 import { PARALLELS_SYSTEM } from '../../prompts';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import type { RouteHandler } from '../index';
 
 export function registerParallelsRoutes(handleRoute: RouteHandler) {
-  handleRoute('POST', '/api/parallels', null, async (body) => {
-    if (!checkRateLimit('parallels')) {
+  handleRoute('POST', '/api/parallels', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('parallels', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
     const ai = getProvider();

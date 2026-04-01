@@ -5,12 +5,12 @@
 
 import { getProvider } from '../../providers/index';
 import { CHAT_SYSTEM } from '../../prompts';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import type { RouteHandler } from '../index';
 
 export function registerChatRoutes(handleRoute: RouteHandler) {
-  handleRoute('POST', '/api/chat', null, async (body) => {
-    if (!checkRateLimit('chat')) {
+  handleRoute('POST', '/api/chat', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('chat', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded' } };
     }
     const ai = getProvider();
@@ -32,7 +32,7 @@ export function registerChatRoutes(handleRoute: RouteHandler) {
 
 /** Handle streaming chat via Server-Sent Events */
 export async function handleStreamRequest(body: any, res: any): Promise<void> {
-  if (!checkRateLimit('chat-stream')) {
+  if (!checkRateLimit('chat-stream', getClientIP(reqHeaders || {}))) {
     res.writeHead(429, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
     return;

@@ -6,7 +6,7 @@
 
 import { getUserProgress, saveUserProgress, upsertEvent } from '../../db';
 import { getAuth } from '../../auth';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { ANCHOR_EVENTS } from '../../../src/data/anchorEvents.ts';
 import type { RouteHandler } from '../index';
 
@@ -45,8 +45,8 @@ export function registerUserRoutes(handleRoute: RouteHandler, dbReady: () => boo
     return { status: 200, data: { ok: true } };
   });
 
-  handleRoute('POST', '/api/seed', null, async (body) => {
-    if (!checkRateLimit('seed')) {
+  handleRoute('POST', '/api/seed', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('seed', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
     const adminKey = process.env.ADMIN_KEY;

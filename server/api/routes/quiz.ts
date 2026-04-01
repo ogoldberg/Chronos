@@ -4,12 +4,12 @@
 
 import { getProvider } from '../../providers/index';
 import { QUIZ_SYSTEM } from '../../prompts';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import type { RouteHandler } from '../index';
 
 export function registerQuizRoutes(handleRoute: RouteHandler) {
-  handleRoute('POST', '/api/quiz', null, async (body) => {
-    if (!checkRateLimit('quiz')) {
+  handleRoute('POST', '/api/quiz', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('quiz', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
     const ai = getProvider();

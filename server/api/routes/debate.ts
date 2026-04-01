@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { getProvider } from '../../providers/index';
 import { DEBATE_SYSTEM } from '../../prompts';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
 
@@ -14,8 +14,8 @@ const DebateRequestSchema = z.object({
 });
 
 export function registerDebateRoutes(handleRoute: RouteHandler) {
-  handleRoute('POST', '/api/debate', null, async (body) => {
-    if (!checkRateLimit('debate')) {
+  handleRoute('POST', '/api/debate', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('debate', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
 

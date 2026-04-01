@@ -4,7 +4,7 @@
  */
 
 import { getEventsInRange, searchEvents } from '../../db';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import type { RouteHandler } from '../index';
 
 export function registerEventsRoutes(handleRoute: RouteHandler, dbReady: () => boolean) {
@@ -20,7 +20,7 @@ export function registerEventsRoutes(handleRoute: RouteHandler, dbReady: () => b
   });
 
   handleRoute('GET', '/api/search', null, async (_body, url) => {
-    if (!checkRateLimit('search')) {
+    if (!checkRateLimit('search', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
     const params = new URL(url, 'http://localhost').searchParams;

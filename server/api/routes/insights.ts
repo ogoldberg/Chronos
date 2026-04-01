@@ -4,12 +4,12 @@
 
 import { getProvider } from '../../providers/index';
 import { INSIGHTS_SYSTEM } from '../../prompts';
-import { checkRateLimit } from '../middleware/rateLimit';
+import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import type { RouteHandler } from '../index';
 
 export function registerInsightsRoutes(handleRoute: RouteHandler) {
-  handleRoute('POST', '/api/insights', null, async (body) => {
-    if (!checkRateLimit('insights')) {
+  handleRoute('POST', '/api/insights', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('insights', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded' } };
     }
     const ai = getProvider();
