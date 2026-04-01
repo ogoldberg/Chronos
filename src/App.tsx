@@ -122,7 +122,12 @@ export default function App() {
         viewport.span,
         existingTitlesRef.current,
         (newEvents) => {
-          setDynamicEvents(prev => [...prev, ...newEvents]);
+          setDynamicEvents(prev => {
+            const combined = [...prev, ...newEvents];
+            // Cap at 2000 events to prevent memory bloat — evict oldest
+            if (combined.length > 2000) return combined.slice(-2000);
+            return combined;
+          });
           setCacheStats(getCacheStats());
         },
       );

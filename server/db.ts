@@ -212,7 +212,7 @@ export async function upsertEvent(event: Partial<DBEvent> & { id: string; title:
       event.image_url || null, event.thumbnail_url || null,
       event.video_url || null, event.audio_url || null,
       event.media_caption || null, event.media_credit || null,
-      event.lat || null, event.lng || null,
+      event.lat ?? null, event.lng ?? null,
       event.geo_type || null,
       event.path ? JSON.stringify(event.path) : null,
       event.region ? JSON.stringify(event.region) : null,

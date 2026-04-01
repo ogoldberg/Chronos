@@ -9,7 +9,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { handleApiRequest, handleStreamRequest } from './api';
+import { handleApiRequest, handleStreamRequest, setDbReady } from './api';
 import { getProvider } from './providers/index';
 import { initDB } from './db';
 
@@ -27,6 +27,7 @@ async function main() {
   if (process.env.DATABASE_URL) {
     try {
       await initDB();
+      setDbReady(true);
       console.log('[CHRONOS] PostgreSQL connected');
     } catch (err: any) {
       console.log('[CHRONOS] No PostgreSQL — in-memory cache only:', err.message);
@@ -37,6 +38,11 @@ async function main() {
 
   // JSON body parser for API routes
   app.use('/api', express.json({ limit: '1mb' }));
+
+  // Health check
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', uptime: Math.round(process.uptime()) });
+  });
 
   // Streaming chat endpoint
   app.post('/api/chat/stream', async (req, res) => {

@@ -6,10 +6,29 @@ import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM } from './prompts';
 
 let dbReady = false;
 
+/** Set by production.ts or Vite plugin after DB init */
+export function setDbReady(ready: boolean) { dbReady = ready; }
+
 // Server-side cache to avoid duplicate API calls for the same region
 const discoveryCache = new Map<string, { events: any[]; timestamp: number }>();
 const CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
 const MAX_CACHE_SIZE = 1000;
+
+// Simple rate limiter: max requests per minute per endpoint
+const rateLimits = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 30; // requests per minute
+
+function checkRateLimit(endpoint: string): boolean {
+  const now = Date.now();
+  const entry = rateLimits.get(endpoint);
+  if (!entry || now > entry.resetAt) {
+    rateLimits.set(endpoint, { count: 1, resetAt: now + 60000 });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
 
 function pruneCache() {
   if (discoveryCache.size <= MAX_CACHE_SIZE) return;
@@ -66,8 +85,12 @@ export async function handleApiRequest(
     return { status: 200, data: { provider: cfg.provider, model: cfg.model, webSearch: cfg.webSearch } };
   }
 
-  // POST /api/config — switch provider at runtime
+  // POST /api/config — switch provider at runtime (requires ADMIN_KEY env var)
   if (method === 'POST' && url === '/api/config') {
+    const adminKey = process.env.ADMIN_KEY;
+    if (adminKey && body.adminKey !== adminKey) {
+      return { status: 403, data: { error: 'Invalid admin key' } };
+    }
     const newConfig: AIProviderConfig = {
       provider: body.provider || 'anthropic',
       model: body.model,
@@ -82,6 +105,9 @@ export async function handleApiRequest(
 
   // POST /api/discover
   if (method === 'POST' && url === '/api/discover') {
+    if (!checkRateLimit('discover')) {
+      return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
+    }
     const { startYear, endYear, existingTitles = [], count = 10, tierId = '' } = body;
 
     // Check cache
@@ -98,7 +124,9 @@ export async function handleApiRequest(
 
     const jsonMatch = resp.text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      const events = JSON.parse(jsonMatch[0]);
+      let events: any[];
+      try { events = JSON.parse(jsonMatch[0]); }
+      catch { return { status: 200, data: { events: [] } }; }
       discoveryCache.set(cacheKey, { events, timestamp: Date.now() });
       pruneCache();
 
@@ -127,7 +155,8 @@ export async function handleApiRequest(
 
     const jsonMatch = resp.text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      return { status: 200, data: { insights: JSON.parse(jsonMatch[0]) } };
+      try { return { status: 200, data: { insights: JSON.parse(jsonMatch[0]) } }; }
+      catch { /* fall through */ }
     }
     return { status: 200, data: { insights: [] } };
   }
