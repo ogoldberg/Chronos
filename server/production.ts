@@ -59,7 +59,7 @@ async function main() {
       await handleStreamRequest(req.body || {}, res);
     } catch (err: any) {
       console.error('[API] stream error:', err.message);
-      if (!res.headersSent) res.status(500).json({ error: err.message });
+      if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -69,8 +69,8 @@ async function main() {
       const result = await handleApiRequest(req.method, req.url, req.body || {});
       res.status(result.status).json(result.data);
     } catch (err: any) {
-      console.error(`[API] ${req.url} error:`, err.message);
-      res.status(500).json({ error: err.message });
+      console.error(`[API] ${req.url} error:`, err.message, err.stack);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 

@@ -5,6 +5,7 @@ import { MYTHS } from '../data/myths';
 interface Props {
   onNavigate?: (year: number, span: number) => void;
   onAskAI?: (message: string) => void;
+  onClose?: () => void;
   centerYear?: number;
   span?: number;
 }
@@ -19,7 +20,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   culture: 'Culture',
 };
 
-export default function MythBuster({ onNavigate, onAskAI, centerYear, span }: Props) {
+export default function MythBuster({ onNavigate, onAskAI, onClose, centerYear, span }: Props) {
   const [category, setCategory] = useState<string>('all');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -150,6 +151,14 @@ export default function MythBuster({ onNavigate, onAskAI, centerYear, span }: Pr
           >
             MYTH vs. REALITY
           </span>
+        )}
+        {!collapsed && onClose && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#ffffff40', cursor: 'pointer', fontSize: 14 }}
+          >
+            ✕
+          </button>
         )}
         {!collapsed && (
           <span

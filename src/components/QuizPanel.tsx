@@ -11,12 +11,13 @@ interface QuizQuestion {
 interface Props {
   recentEvents?: string[];
   era?: string;
+  onClose?: () => void;
 }
 
 const TIMER_SECONDS = 15;
 
-export default function QuizPanel({ recentEvents = [], era = 'modern' }: Props) {
-  const [open, setOpen] = useState(false);
+export default function QuizPanel({ recentEvents = [], era = 'modern', onClose }: Props) {
+  const [open, setOpen] = useState(true);
   const [question, setQuestion] = useState<QuizQuestion | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
@@ -221,7 +222,7 @@ export default function QuizPanel({ recentEvents = [], era = 'modern' }: Props) 
           +{sessionXP} XP
         </div>
         <button
-          onClick={() => { setOpen(false); stopTimer(); }}
+          onClick={() => { setOpen(false); stopTimer(); onClose?.(); }}
           style={{
             background: 'none', border: 'none', color: '#ffffff60',
             fontSize: 16, cursor: 'pointer', padding: 2,

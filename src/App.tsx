@@ -250,28 +250,25 @@ export default function App() {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
 
-      const { centerYear, span } = viewport;
-      const panStep = span * 0.1;
-
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
-          setViewport({ centerYear: clamp(centerYear - panStep, -14e9, 2030), span });
+          setViewport(prev => ({ centerYear: clamp(prev.centerYear - prev.span * 0.1, -14e9, 2030), span: prev.span }));
           break;
         case 'ArrowRight':
           e.preventDefault();
-          setViewport({ centerYear: clamp(centerYear + panStep, -14e9, 2030), span });
+          setViewport(prev => ({ centerYear: clamp(prev.centerYear + prev.span * 0.1, -14e9, 2030), span: prev.span }));
           break;
         case 'ArrowUp':
         case '+':
         case '=':
           e.preventDefault();
-          setViewport({ centerYear, span: clamp(span / 1.3, 0.5, 3e10) });
+          setViewport(prev => ({ centerYear: prev.centerYear, span: clamp(prev.span / 1.3, 0.5, 3e10) }));
           break;
         case 'ArrowDown':
         case '-':
           e.preventDefault();
-          setViewport({ centerYear, span: clamp(span * 1.3, 0.5, 3e10) });
+          setViewport(prev => ({ centerYear: prev.centerYear, span: clamp(prev.span * 1.3, 0.5, 3e10) }));
           break;
         case 'Escape':
           e.preventDefault();
@@ -511,6 +508,7 @@ export default function App() {
           <MythBuster
             onNavigate={(y, s) => animateTo(y, s)}
             onAskAI={(q) => { setShowMyths(false); setChatInitMsg(q); }}
+            onClose={() => setShowMyths(false)}
             centerYear={viewport.centerYear}
             span={viewport.span}
           />
@@ -523,6 +521,7 @@ export default function App() {
           <QuizPanel
             recentEvents={visibleEvents.slice(0, 10).map(e => e.title)}
             era={scaleLabel(viewport.span)}
+            onClose={() => setShowQuiz(false)}
           />
         </Suspense>
       )}

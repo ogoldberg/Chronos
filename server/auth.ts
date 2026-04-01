@@ -48,7 +48,13 @@ export function initAuth() {
     },
 
     baseURL: process.env.BETTER_AUTH_URL || process.env.BASE_URL || 'http://localhost:3000',
-    secret: process.env.BETTER_AUTH_SECRET || process.env.AUTH_SECRET || 'chronos-dev-secret-change-in-production',
+    secret: (() => {
+      const secret = process.env.BETTER_AUTH_SECRET || process.env.AUTH_SECRET;
+      if (!secret && process.env.NODE_ENV === 'production') {
+        throw new Error('[AUTH] FATAL: Set BETTER_AUTH_SECRET or AUTH_SECRET in production');
+      }
+      return secret || 'chronos-dev-only-not-for-production';
+    })(),
 
     trustedOrigins: [
       process.env.BASE_URL || 'http://localhost:3000',

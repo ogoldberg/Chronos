@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { TimelineEvent, WikiData } from '../types';
+import type { TimelineEvent, WikiData, Citation } from '../types';
 import { formatYear } from '../utils/format';
-import { getShareURL } from '../utils/urlState';
 import { fetchWikiSummary } from '../services/wikipediaApi';
 import { searchWikisource, type SourceDocument } from '../services/wikisourceApi';
 import { factCheckEvent, type FactCheckResult } from '../services/factCheck';
 import { verifyCitations } from '../services/citationVerifier';
-import type { Citation } from '../types';
 
 interface Props {
   event: TimelineEvent;
@@ -24,22 +22,24 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
   useEffect(() => {
     if (event.wiki) {
       setLoading(true);
-      fetchWikiSummary(event.wiki).then(data => {
-        setWiki(data);
-        setLoading(false);
-      });
+      fetchWikiSummary(event.wiki)
+        .then(data => { setWiki(data); setLoading(false); })
+        .catch(() => setLoading(false));
     }
-    // Verify citations — construct real URLs, check they exist
-    verifyCitations(event.citations, event.wiki).then(setVerifiedCitations);
-    // Fact-check discovered events (anchors are trusted)
+    verifyCitations(event.citations, event.wiki)
+      .then(setVerifiedCitations)
+      .catch(() => {});
     if (event.source === 'discovered') {
-      factCheckEvent(event.title, event.year, event.description).then(setFactCheck);
+      factCheckEvent(event.title, event.year, event.description)
+        .then(setFactCheck)
+        .catch(() => {});
     }
-    // Search for primary sources
     if (event.year > -3000) {
-      searchWikisource(event.title).then(setSources);
+      searchWikisource(event.title)
+        .then(setSources)
+        .catch(() => {});
     }
-  }, [event.wiki, event.title, event.year]);
+  }, [event.wiki, event.title, event.year, event.source, event.description, event.citations]);
 
   const [imgLoaded, setImgLoaded] = useState(false);
 

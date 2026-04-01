@@ -46,12 +46,19 @@ function parseBody(req: any): Promise<any> {
   return new Promise((resolve) => {
     let body = '';
     let size = 0;
+    let resolved = false;
     req.on('data', (chunk: string) => {
       size += chunk.length;
-      if (size > MAX_BODY_SIZE) { resolve({}); return; }
+      if (size > MAX_BODY_SIZE && !resolved) {
+        resolved = true;
+        resolve({});
+        req.destroy();
+        return;
+      }
       body += chunk;
     });
     req.on('end', () => {
+      if (resolved) return;
       try { resolve(JSON.parse(body)); }
       catch { resolve({}); }
     });
@@ -160,6 +167,9 @@ export async function handleApiRequest(
 
   // POST /api/insights
   if (method === 'POST' && url === '/api/insights') {
+    if (!checkRateLimit('insights')) {
+      return { status: 429, data: { error: 'Rate limit exceeded' } };
+    }
     const { centerYear, span, visibleEvents = [] } = body;
     const resp = await ai.chat(INSIGHTS_SYSTEM, [
       { role: 'user', content: `Time period centered on year ${centerYear} (span: ${span} years). Visible events: ${visibleEvents.join(', ') || 'none'}. Give me 3 fascinating facts about this era.` },
@@ -307,7 +317,19 @@ export async function handleApiRequest(
 
   // POST /api/chat
   if (method === 'POST' && url === '/api/chat') {
+    if (!checkRateLimit('chat')) {
+      return { status: 429, data: { error: 'Rate limit exceeded' } };
+    }
     const { messages, context } = body;
+    // Validate messages
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 20) {
+      return { status: 400, data: { error: 'messages must be an array of 1-20 items' } };
+    }
+    for (const msg of messages) {
+      if (typeof msg.content !== 'string' || msg.content.length > 8000) {
+        return { status: 400, data: { error: 'Each message content must be a string under 8000 chars' } };
+      }
+    }
     const system = CHAT_SYSTEM(context);
     const resp = await ai.chat(system, messages, { maxTokens: 2000, webSearch: true });
     return { status: 200, data: { content: resp.text } };
@@ -318,6 +340,11 @@ export async function handleApiRequest(
 
 /** Handle streaming chat via Server-Sent Events */
 export async function handleStreamRequest(body: any, res: any): Promise<void> {
+  if (!checkRateLimit('chat-stream')) {
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+    return;
+  }
   const ai = getProvider();
   const { messages, context } = body;
   const system = CHAT_SYSTEM(context);
@@ -393,9 +420,9 @@ export function apiPlugin(): Plugin {
           res.writeHead(result.status, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(result.data));
         } catch (err: any) {
-          console.error(`[API] ${url} error:`, err.message);
+          console.error(`[API] ${url} error:`, err.message, err.stack);
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: err.message }));
+          res.end(JSON.stringify({ error: 'Internal server error' }));
         }
       });
     },

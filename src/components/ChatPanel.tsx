@@ -80,7 +80,6 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
 
       // Stream the response token by token
       let content = '';
-      const streamingMsgIndex = messages.length + 1; // +1 for user msg we just added
 
       const resp = await fetch('/api/chat/stream', {
         method: 'POST',
