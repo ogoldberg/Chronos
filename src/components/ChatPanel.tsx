@@ -138,11 +138,11 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
             } catch { /* skip */ }
           }
         }
-        // Remove the streaming placeholder — we'll re-add after processing
-        setMessages(prev => prev.slice(0, -1));
+        // Keep streaming message — we'll update it in-place after processing tags
       }
 
       if (!content) content = "Sorry, I had trouble connecting. Try again?";
+      const wasStreaming = resp.ok && resp.body;
 
       // Extract GOTO commands
       const gotoMatches = [...content.matchAll(/\[\[GOTO:([-\d.e]+),([-\d.e]+)\]\]/g)];
@@ -210,7 +210,16 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
       }
 
       const cleanContent = content.trim();
-      setMessages(prev => [...prev, { role: 'assistant', content: cleanContent }]);
+      if (wasStreaming) {
+        // Update the streaming message in place (no flicker)
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'assistant', content: cleanContent };
+          return updated;
+        });
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: cleanContent }]);
+      }
 
       // Auto-speak response in voice mode
       if (voiceMode && cleanContent) {

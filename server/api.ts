@@ -185,16 +185,21 @@ export async function handleStreamRequest(body: any, res: any): Promise<void> {
     'X-Accel-Buffering': 'no',
   });
 
+  // Detect client disconnect to stop generating tokens
+  let aborted = false;
+  res.on('close', () => { aborted = true; });
+
   try {
     await ai.chatStream(system, messages, (token) => {
+      if (aborted) return;
       res.write(`data: ${JSON.stringify({ token })}\n\n`);
     }, { maxTokens: 2000, webSearch: true });
 
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    if (!aborted) res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
   } catch (err: any) {
-    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    if (!aborted) res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
   }
-  res.end();
+  if (!aborted) res.end();
 }
 
 /** Vite plugin — wraps handleApiRequest for dev server */

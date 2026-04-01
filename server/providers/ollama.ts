@@ -70,14 +70,18 @@ export class OllamaProvider implements AIProvider {
     }
 
     let fullText = '';
+    let lineBuffer = '';
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const lines = decoder.decode(value, { stream: true }).split('\n').filter(Boolean);
+      lineBuffer += decoder.decode(value, { stream: true });
+      const lines = lineBuffer.split('\n');
+      lineBuffer = lines.pop() || ''; // Keep incomplete last line in buffer
       for (const line of lines) {
+        if (!line.trim()) continue;
         try {
           const data = JSON.parse(line);
           if (data.message?.content) {
