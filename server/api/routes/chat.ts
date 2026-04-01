@@ -1,0 +1,66 @@
+/**
+ * POST /api/chat — non-streaming chat
+ * POST /api/chat/stream — streaming chat via SSE (handled separately)
+ */
+
+import { getProvider } from '../../providers/index';
+import { CHAT_SYSTEM } from '../../prompts';
+import { checkRateLimit } from '../middleware/rateLimit';
+import type { RouteHandler } from '../index';
+
+export function registerChatRoutes(handleRoute: RouteHandler) {
+  handleRoute('POST', '/api/chat', null, async (body) => {
+    if (!checkRateLimit('chat')) {
+      return { status: 429, data: { error: 'Rate limit exceeded' } };
+    }
+    const ai = getProvider();
+    const { messages, context } = body;
+    // Validate messages
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 20) {
+      return { status: 400, data: { error: 'messages must be an array of 1-20 items' } };
+    }
+    for (const msg of messages) {
+      if (typeof msg.content !== 'string' || msg.content.length > 8000) {
+        return { status: 400, data: { error: 'Each message content must be a string under 8000 chars' } };
+      }
+    }
+    const system = CHAT_SYSTEM(context);
+    const resp = await ai.chat(system, messages, { maxTokens: 2000, webSearch: true });
+    return { status: 200, data: { content: resp.text } };
+  });
+}
+
+/** Handle streaming chat via Server-Sent Events */
+export async function handleStreamRequest(body: any, res: any): Promise<void> {
+  if (!checkRateLimit('chat-stream')) {
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
+    return;
+  }
+  const ai = getProvider();
+  const { messages, context } = body;
+  const system = CHAT_SYSTEM(context);
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  // Detect client disconnect to stop generating tokens
+  let aborted = false;
+  res.on('close', () => { aborted = true; });
+
+  try {
+    await ai.chatStream(system, messages, (token) => {
+      if (aborted) return;
+      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    }, { maxTokens: 2000, webSearch: true });
+
+    if (!aborted) res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+  } catch (err: any) {
+    if (!aborted) res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+  }
+  if (!aborted) res.end();
+}
