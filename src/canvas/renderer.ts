@@ -22,6 +22,7 @@ export interface HitTarget {
   event: TimelineEvent;
   x: number;
   y: number;
+  cluster?: TimelineEvent[];
 }
 
 export function renderTimeline(
@@ -153,18 +154,103 @@ export function renderTimeline(
     }
   }
 
-  // Layout events
-  const hitTargets: HitTarget[] = [];
-  const placed: { x: number; y: number }[] = [];
+  // Cluster events that are too close together
+  const CLUSTER_PX = 35; // minimum pixel distance between events
+  const MAX_VISIBLE = 60; // max individual events before forcing clusters
 
   const sorted = [...visible].sort((a, b) => {
     if (a.source !== b.source) return a.source === 'anchor' ? -1 : 1;
     return Math.abs(b.year) - Math.abs(a.year);
   });
 
+  interface PlacedEvent {
+    event: TimelineEvent;
+    x: number;
+    cluster?: TimelineEvent[];
+  }
+
+  const placedEvents: PlacedEvent[] = [];
+  const clustered = new Set<string>();
+
   for (const ev of sorted) {
+    if (clustered.has(ev.id)) continue;
     const x = yearToPixel(ev.year, vp, W);
     if (x < -50 || x > W + 50) continue;
+
+    // Check if this event is close to an already-placed event
+    let merged = false;
+    if (placedEvents.length > MAX_VISIBLE || sorted.length > MAX_VISIBLE * 2) {
+      for (const pe of placedEvents) {
+        if (Math.abs(pe.x - x) < CLUSTER_PX) {
+          // Merge into existing cluster
+          if (!pe.cluster) pe.cluster = [pe.event];
+          pe.cluster.push(ev);
+          clustered.add(ev.id);
+          merged = true;
+          break;
+        }
+      }
+    }
+    if (!merged) {
+      placedEvents.push({ event: ev, x });
+    }
+  }
+
+  // Layout events and clusters
+  const hitTargets: HitTarget[] = [];
+  const placed: { x: number; y: number }[] = [];
+
+  for (const pe of placedEvents) {
+    const ev = pe.event;
+    const x = pe.x;
+
+    // If this is a cluster, render cluster marker instead
+    if (pe.cluster && pe.cluster.length > 1) {
+      const clusterY = timelineY - 25;
+      hitTargets.push({ event: ev, x, y: clusterY, cluster: pe.cluster });
+      placed.push({ x, y: clusterY });
+
+      // Cluster dot
+      ctx.beginPath();
+      ctx.arc(x, timelineY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = era.accent;
+      ctx.fill();
+
+      // Cluster bubble
+      const count = pe.cluster.length;
+      const bubbleRadius = 14;
+      ctx.beginPath();
+      ctx.arc(x, clusterY, bubbleRadius, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(13, 17, 23, 0.9)';
+      ctx.fill();
+      ctx.strokeStyle = era.accent + '80';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Count text
+      ctx.font = 'bold 11px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = era.accent;
+      ctx.fillText(`${count}`, x, clusterY);
+
+      // "events" label
+      ctx.font = '8px -apple-system, sans-serif';
+      ctx.fillStyle = '#ffffff50';
+      ctx.fillText('events', x, clusterY + bubbleRadius + 8);
+
+      // Connector
+      ctx.strokeStyle = era.accent + '30';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(x, timelineY);
+      ctx.lineTo(x, clusterY + bubbleRadius);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      continue;
+    }
 
     let evY: number;
 

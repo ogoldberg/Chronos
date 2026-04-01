@@ -133,16 +133,29 @@ export default function TimelineCanvas({
         if (!rect) return;
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-        let found: TimelineEvent | null = null;
+        let found: typeof hitTargetsRef.current[0] | null = null;
         for (const ht of hitTargetsRef.current) {
           const dx = mx - ht.x;
           const dy = my - ht.y;
           if (dx * dx + dy * dy < 400) {
-            found = ht.event;
+            found = ht;
             break;
           }
         }
-        onSelectEvent(found);
+        if (found?.cluster && found.cluster.length > 1) {
+          // Clicked a cluster — zoom in to see individual events
+          const years = found.cluster.map(e => e.year);
+          const minY = Math.min(...years);
+          const maxY = Math.max(...years);
+          const range = maxY - minY;
+          const center = (minY + maxY) / 2;
+          onViewportChange({
+            centerYear: center,
+            span: Math.max(range * 2, viewport.span / 4),
+          });
+        } else {
+          onSelectEvent(found?.event ?? null);
+        }
       }
     },
     [onSelectEvent]

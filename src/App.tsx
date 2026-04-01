@@ -202,6 +202,54 @@ export default function App() {
     setTourPlaying(false);
   }, []);
 
+  // Keyboard help overlay
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't capture keys when typing in an input or textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
+
+      const { centerYear, span } = viewport;
+      const panStep = span * 0.1;
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          setViewport({ centerYear: clamp(centerYear - panStep, -14e9, 2030), span });
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          setViewport({ centerYear: clamp(centerYear + panStep, -14e9, 2030), span });
+          break;
+        case 'ArrowUp':
+        case '+':
+        case '=':
+          e.preventDefault();
+          setViewport({ centerYear, span: clamp(span / 1.3, 0.5, 3e10) });
+          break;
+        case 'ArrowDown':
+        case '-':
+          e.preventDefault();
+          setViewport({ centerYear, span: clamp(span * 1.3, 0.5, 3e10) });
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setSelectedEvent(null);
+          setShowHelp(false);
+          break;
+        case '?':
+          e.preventDefault();
+          setShowHelp(prev => !prev);
+          break;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [viewport]);
+
   // Chat-to-timeline: add events from AI conversation
   const handleAddEvents = useCallback((newEvents: TimelineEvent[]) => {
     setDynamicEvents(prev => {
@@ -314,6 +362,8 @@ export default function App() {
         />
       </Suspense>
 
+      {showHelp && <KeyboardHelp onClose={() => setShowHelp(false)} />}
+
       {tourStops && (
         <TourOverlay
           stops={tourStops}
@@ -326,6 +376,27 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+function KeyboardHelp({ onClose }: { onClose: () => void }) {
+  return (
+    <>
+      <div className="overlay-backdrop" onClick={onClose} />
+      <div className="keyboard-help" role="dialog" aria-label="Keyboard shortcuts">
+        <h3>Keyboard Shortcuts</h3>
+        <table>
+          <tbody>
+            <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Pan timeline left / right</td></tr>
+            <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Zoom in / out</td></tr>
+            <tr><td><kbd>+</kbd> <kbd>-</kbd></td><td>Zoom in / out</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Close panel / overlay</td></tr>
+            <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+          </tbody>
+        </table>
+        <button className="keyboard-help-close" onClick={onClose}>Close</button>
+      </div>
+    </>
   );
 }
 
