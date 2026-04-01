@@ -1,0 +1,18 @@
+{
+  "name": "CHRONOS — Timeline of Existence",
+  "short_name": "CHRONOS",
+  "description": "An infinite zoomable timeline from the Big Bang to the present day, powered by AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a1a",
+  "theme_color": "#0a0a1a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

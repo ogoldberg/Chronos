@@ -3,6 +3,7 @@ import type { TimelineEvent, WikiData } from '../types';
 import { formatYear } from '../utils/format';
 import { getShareURL } from '../utils/urlState';
 import { fetchWikiSummary } from '../services/wikipediaApi';
+import { searchWikisource, type SourceDocument } from '../services/wikisourceApi';
 
 interface Props {
   event: TimelineEvent;
@@ -13,6 +14,7 @@ interface Props {
 export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [wiki, setWiki] = useState<WikiData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sources, setSources] = useState<SourceDocument[]>([]);
 
   useEffect(() => {
     if (event.wiki) {
@@ -22,7 +24,11 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         setLoading(false);
       });
     }
-  }, [event.wiki]);
+    // Search for primary sources
+    if (event.year > -3000) {
+      searchWikisource(event.title).then(setSources);
+    }
+  }, [event.wiki, event.title, event.year]);
 
   return (
     <div style={{
@@ -262,6 +268,43 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
                 <span>→</span>
                 <span>{conn.targetTitle || conn.targetId}</span>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* Primary Sources */}
+        {sources.length > 0 && (
+          <div style={{
+            background: 'rgba(255,255,255,0.04)',
+            borderRadius: 10,
+            padding: 14,
+            marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 10, color: '#ffffff50', fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>
+              PRIMARY SOURCES
+            </div>
+            {sources.slice(0, 3).map((src, i) => (
+              <a
+                key={i}
+                href={src.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block',
+                  padding: '6px 0',
+                  borderBottom: i < Math.min(sources.length, 3) - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                  color: '#ffffffcc',
+                  textDecoration: 'none',
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ fontWeight: 500 }}>📜 {src.title}</div>
+                {src.extract && (
+                  <div style={{ color: '#ffffff60', fontSize: 11, marginTop: 2, lineHeight: 1.4 }}>
+                    {src.extract.slice(0, 100)}...
+                  </div>
+                )}
+              </a>
             ))}
           </div>
         )}

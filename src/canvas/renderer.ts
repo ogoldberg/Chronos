@@ -154,103 +154,95 @@ export function renderTimeline(
     }
   }
 
-  // Cluster events that are too close together
-  const CLUSTER_PX = 35; // minimum pixel distance between events
-  const MAX_VISIBLE = 60; // max individual events before forcing clusters
+  // Grid-based event clustering: divide canvas into ~60px cells
+  const CELL_WIDTH = 60;
 
   const sorted = [...visible].sort((a, b) => {
     if (a.source !== b.source) return a.source === 'anchor' ? -1 : 1;
     return Math.abs(b.year) - Math.abs(a.year);
   });
 
-  interface PlacedEvent {
-    event: TimelineEvent;
-    x: number;
-    cluster?: TimelineEvent[];
-  }
-
-  const placedEvents: PlacedEvent[] = [];
-  const clustered = new Set<string>();
-
+  // Compute pixel x for each visible event and assign to grid cells
+  const eventPositions: { ev: TimelineEvent; x: number }[] = [];
   for (const ev of sorted) {
-    if (clustered.has(ev.id)) continue;
     const x = yearToPixel(ev.year, vp, W);
     if (x < -50 || x > W + 50) continue;
+    eventPositions.push({ ev, x });
+  }
 
-    // Check if this event is close to an already-placed event
-    let merged = false;
-    if (placedEvents.length > MAX_VISIBLE || sorted.length > MAX_VISIBLE * 2) {
-      for (const pe of placedEvents) {
-        if (Math.abs(pe.x - x) < CLUSTER_PX) {
-          // Merge into existing cluster
-          if (!pe.cluster) pe.cluster = [pe.event];
-          pe.cluster.push(ev);
-          clustered.add(ev.id);
-          merged = true;
-          break;
+  const cellMap = new Map<number, { ev: TimelineEvent; x: number }[]>();
+  for (const item of eventPositions) {
+    const cellIdx = Math.floor(item.x / CELL_WIDTH);
+    let cell = cellMap.get(cellIdx);
+    if (!cell) {
+      cell = [];
+      cellMap.set(cellIdx, cell);
+    }
+    cell.push(item);
+  }
+
+  // Build clusters from cells with 3+ events, merging adjacent cells within 40px
+  const clusteredIds = new Set<string>();
+  interface ClusterInfo {
+    events: TimelineEvent[];
+    centroidX: number;
+    color: string; // most common color
+  }
+  const clusterList: ClusterInfo[] = [];
+
+  const sortedCellKeys = [...cellMap.keys()].sort((a, b) => a - b);
+  for (const cellIdx of sortedCellKeys) {
+    const cellItems = cellMap.get(cellIdx)!;
+    const unclaimed = cellItems.filter(it => !clusteredIds.has(it.ev.id));
+    if (unclaimed.length === 0) continue;
+
+    // Gather nearby items from adjacent cells (within 40px of any unclaimed item)
+    const nearby: { ev: TimelineEvent; x: number }[] = [];
+    for (let adj = cellIdx - 1; adj <= cellIdx + 1; adj++) {
+      const adjItems = cellMap.get(adj);
+      if (!adjItems) continue;
+      for (const it of adjItems) {
+        if (clusteredIds.has(it.ev.id)) continue;
+        const closeEnough = unclaimed.some(u => Math.abs(u.x - it.x) <= 40);
+        if (closeEnough && !nearby.some(n => n.ev.id === it.ev.id)) {
+          nearby.push(it);
         }
       }
     }
-    if (!merged) {
-      placedEvents.push({ event: ev, x });
+
+    // Only cluster when 3+ events overlap
+    if (nearby.length >= 3) {
+      for (const it of nearby) clusteredIds.add(it.ev.id);
+      const cx = nearby.reduce((s, it) => s + it.x, 0) / nearby.length;
+
+      // Find most common color
+      const colorCounts = new Map<string, number>();
+      for (const it of nearby) {
+        colorCounts.set(it.ev.color, (colorCounts.get(it.ev.color) || 0) + 1);
+      }
+      let bestColor = nearby[0].ev.color;
+      let bestCount = 0;
+      for (const [c, n] of colorCounts) {
+        if (n > bestCount) { bestColor = c; bestCount = n; }
+      }
+
+      clusterList.push({
+        events: nearby.map(it => it.ev),
+        centroidX: cx,
+        color: bestColor,
+      });
     }
   }
 
-  // Layout events and clusters
+  // Layout and render unclustered events normally
   const hitTargets: HitTarget[] = [];
   const placed: { x: number; y: number }[] = [];
 
-  for (const pe of placedEvents) {
-    const ev = pe.event;
-    const x = pe.x;
+  for (const item of eventPositions) {
+    if (clusteredIds.has(item.ev.id)) continue;
 
-    // If this is a cluster, render cluster marker instead
-    if (pe.cluster && pe.cluster.length > 1) {
-      const clusterY = timelineY - 25;
-      hitTargets.push({ event: ev, x, y: clusterY, cluster: pe.cluster });
-      placed.push({ x, y: clusterY });
-
-      // Cluster dot
-      ctx.beginPath();
-      ctx.arc(x, timelineY, 5, 0, Math.PI * 2);
-      ctx.fillStyle = era.accent;
-      ctx.fill();
-
-      // Cluster bubble
-      const count = pe.cluster.length;
-      const bubbleRadius = 14;
-      ctx.beginPath();
-      ctx.arc(x, clusterY, bubbleRadius, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(13, 17, 23, 0.9)';
-      ctx.fill();
-      ctx.strokeStyle = era.accent + '80';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Count text
-      ctx.font = 'bold 11px -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = era.accent;
-      ctx.fillText(`${count}`, x, clusterY);
-
-      // "events" label
-      ctx.font = '8px -apple-system, sans-serif';
-      ctx.fillStyle = '#ffffff50';
-      ctx.fillText('events', x, clusterY + bubbleRadius + 8);
-
-      // Connector
-      ctx.strokeStyle = era.accent + '30';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 2]);
-      ctx.beginPath();
-      ctx.moveTo(x, timelineY);
-      ctx.lineTo(x, clusterY + bubbleRadius);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      continue;
-    }
+    const ev = item.ev;
+    const x = item.x;
 
     let evY: number;
 
@@ -347,6 +339,49 @@ export function renderTimeline(
     ctx.font = `9px "SF Mono", monospace`;
     ctx.fillStyle = ev.color + '99';
     ctx.fillText(formatYearShort(ev.year), x, evY + markerSize / 2 + 20);
+  }
+
+  // Render cluster bubbles for groups of 3+ events
+  for (const cluster of clusterList) {
+    const { events: clusterEvents, centroidX: cx, color } = cluster;
+    const count = clusterEvents.length;
+    const clusterY = timelineY - 30;
+    const RADIUS = 14;
+
+    // Connector line from timeline to cluster bubble
+    ctx.strokeStyle = color + '40';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(cx, timelineY);
+    ctx.lineTo(cx, clusterY + RADIUS);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Dot on timeline axis
+    ctx.beginPath();
+    ctx.arc(cx, timelineY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Translucent filled circle (radius 14px)
+    ctx.beginPath();
+    ctx.arc(cx, clusterY, RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = color + '40';
+    ctx.fill();
+    ctx.strokeStyle = color + 'aa';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Count text
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffffee';
+    ctx.fillText(String(count), cx, clusterY);
+
+    // Add cluster to hitTargets so clicking it can zoom in
+    hitTargets.push({ event: clusterEvents[0], x: cx, y: clusterY, cluster: clusterEvents });
   }
 
   // Connection arcs between related events

@@ -158,7 +158,7 @@ export default function TimelineCanvas({
         }
       }
     },
-    [onSelectEvent]
+    [onSelectEvent, onViewportChange, viewport]
   );
 
   // Touch handlers for mobile
