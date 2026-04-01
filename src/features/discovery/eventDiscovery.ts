@@ -2,7 +2,7 @@
  * Dynamic Event Discovery Engine
  *
  * Divides the timeline into a grid of cells at each zoom tier.
- * Each cell is fetched once, cached in memory + localStorage,
+ * Each cell is fetched once, cached in memory,
  * and never re-requested. Adjacent cells are prefetched.
  */
 
@@ -35,8 +35,7 @@ interface CellState {
   events: TimelineEvent[];
 }
 
-const STORAGE_KEY = 'chronos_event_cache_v2';
-const MAX_CACHE_ENTRIES = 500; // prevent localStorage bloat
+const MAX_CACHE_ENTRIES = 500; // max cells in memory
 
 // In-memory cell state
 const cellStates = new Map<CellKey, CellState>();
@@ -59,74 +58,10 @@ function processQueue() {
   }
 }
 
-// Load cache from localStorage on init
-function loadCache(): Map<CellKey, TimelineEvent[]> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Map();
-    const entries: [CellKey, TimelineEvent[]][] = JSON.parse(raw);
-    const map = new Map(entries);
-    // Hydrate cell states
-    for (const [key, events] of map) {
-      cellStates.set(key, { status: 'loaded', events });
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
-}
+// Cache is memory-only (DB is source of truth, localStorage removed in v2)
+// No loadCache() or saveCache() — cellStates Map is the only client cache
 
-function saveCache() {
-  try {
-    const entries: [CellKey, TimelineEvent[]][] = [];
-    for (const [key, state] of cellStates) {
-      if (state.status === 'loaded' && state.events.length > 0) {
-        entries.push([key, state.events]);
-      }
-    }
-    // Evict oldest entries if over limit
-    const toSave = entries.slice(-MAX_CACHE_ENTRIES);
-    const json = JSON.stringify(toSave);
-    // Check estimated size before writing (~5MB localStorage budget)
-    if (json.length > 4 * 1024 * 1024) {
-      // Too large — keep only half
-      const trimmed = toSave.slice(-Math.floor(MAX_CACHE_ENTRIES / 2));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-    } else {
-      localStorage.setItem(STORAGE_KEY, json);
-    }
-  } catch {
-    // localStorage full — clear oldest half and retry
-    try {
-      const entries: [CellKey, TimelineEvent[]][] = [];
-      for (const [key, state] of cellStates) {
-        if (state.status === 'loaded' && state.events.length > 0) {
-          entries.push([key, state.events]);
-        }
-      }
-      const half = entries.slice(-Math.floor(entries.length / 2));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(half));
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }
-}
-
-/** Get cache age in hours for the oldest entry */
-export function getCacheAge(): number {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return 0;
-    const entries = JSON.parse(raw);
-    if (!entries.length) return 0;
-    // Check if entries have a timestamp (they don't currently, so return 0)
-    return 0;
-  } catch {
-    return 0;
-  }
-}
-
-/** Invalidate cache entries for a specific time range (e.g., after new data) */
+/** Invalidate cache entries for a specific time range */
 export function invalidateCacheRange(startYear: number, endYear: number) {
   for (const [key, state] of cellStates) {
     if (state.status !== 'loaded') continue;
@@ -135,11 +70,7 @@ export function invalidateCacheRange(startYear: number, endYear: number) {
       cellStates.delete(key);
     }
   }
-  saveCache();
 }
-
-// Init cache
-loadCache();
 
 function getTier(span: number) {
   for (const tier of ZOOM_TIERS) {
@@ -259,7 +190,6 @@ export function discoverEvents(
         fetchCell(tier, cellStart, cellEnd, existingTitles)
           .then(events => {
             cellStates.set(key, { status: 'loaded', events });
-            saveCache();
             if (events.length > 0) onNewEvents(events);
           })
           .catch(() => {
@@ -361,7 +291,6 @@ export function getCacheStats() {
  */
 export function clearCache() {
   cellStates.clear();
-  localStorage.removeItem(STORAGE_KEY);
 }
 
 /**
@@ -438,7 +367,6 @@ export async function warmCacheFromDB(): Promise<number> {
       }
     }
 
-    if (totalEvents > 0) saveCache();
     return totalEvents;
   } catch {
     return 0;
