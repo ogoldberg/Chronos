@@ -3,10 +3,20 @@
  * POST /api/chat/stream — streaming chat via SSE (handled separately)
  */
 
+import { z } from 'zod';
 import { getProvider } from '../../providers/index';
 import { CHAT_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
+import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
+
+const chatSchema = z.object({
+  messages: z.array(z.object({
+    role: z.string(),
+    content: z.string().max(8000, 'Each message content must be under 8000 chars'),
+  })).min(1).max(20, 'messages must be an array of 1-20 items'),
+  context: z.string().optional(),
+});
 
 export function registerChatRoutes(handleRoute: RouteHandler) {
   handleRoute('POST', '/api/chat', null, async (body, _url, reqHeaders) => {

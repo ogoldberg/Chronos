@@ -278,10 +278,13 @@ export default function App() {
         {toolBtn('🧠 Quiz', 'quiz')}
         {toolBtn('🔬 Lenses', 'lenses')}
         {toolBtn('🎓 Classroom', 'classroom')}
+        {toolBtn('👩‍🏫 Teach', 'teacher')}
         {toolBtn('📅 My Life', 'personal')}
         {toolBtn('🔮 What If', 'whatif')}
         {toolBtn('⏩ Time-lapse', 'timelapse')}
         {toolBtn('⚖️ Debate', 'debate')}
+        {toolBtn('🌐 Community', 'community')}
+        {toolBtn('📊 Data', 'overlays')}
         {toolBtn('📤 Export', 'export')}
         {toolBtn('👤 Account', 'auth')}
       </div>

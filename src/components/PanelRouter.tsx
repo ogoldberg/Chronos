@@ -22,6 +22,8 @@ const TimeLapse = lazy(() => import('../features/timelapse/TimeLapse'));
 const DebatePanel = lazy(() => import('../features/debate/DebatePanel'));
 const CommunityHub = lazy(() => import('../features/community/CommunityHub'));
 const DataOverlays = lazy(() => import('../features/overlays/DataOverlays'));
+const TeacherDashboard = lazy(() => import('../features/classroom/TeacherDashboard'));
+const StudentView = lazy(() => import('../features/classroom/StudentView'));
 
 export default function PanelRouter() {
   const activePanel = useUIStore(s => s.activePanel);
@@ -162,6 +164,12 @@ export default function PanelRouter() {
       )}
       {activePanel === 'overlays' && (
         <DataOverlays />
+      )}
+      {activePanel === 'teacher' && (
+        <TeacherDashboard onClose={closePanel} />
+      )}
+      {activePanel === 'student' && (
+        <StudentView onClose={closePanel} />
       )}
       {activePanel === 'help' && (
         <KeyboardHelpInline onClose={closePanel} />

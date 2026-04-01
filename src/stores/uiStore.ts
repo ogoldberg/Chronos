@@ -7,6 +7,7 @@ export type PanelId =
   | 'export' | 'timelapse' | 'debate'
   | 'teacher' | 'student'
   | 'community' | 'overlays'
+  | 'community' | 'overlays'
   | null;
 
 interface UIState {
