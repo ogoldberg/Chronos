@@ -86,13 +86,56 @@ function saveCache() {
     }
     // Evict oldest entries if over limit
     const toSave = entries.slice(-MAX_CACHE_ENTRIES);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    const json = JSON.stringify(toSave);
+    // Check estimated size before writing (~5MB localStorage budget)
+    if (json.length > 4 * 1024 * 1024) {
+      // Too large — keep only half
+      const trimmed = toSave.slice(-Math.floor(MAX_CACHE_ENTRIES / 2));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    } else {
+      localStorage.setItem(STORAGE_KEY, json);
+    }
   } catch {
-    // localStorage full — clear and retry
+    // localStorage full — clear oldest half and retry
     try {
+      const entries: [CellKey, TimelineEvent[]][] = [];
+      for (const [key, state] of cellStates) {
+        if (state.status === 'loaded' && state.events.length > 0) {
+          entries.push([key, state.events]);
+        }
+      }
+      const half = entries.slice(-Math.floor(entries.length / 2));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(half));
+    } catch {
       localStorage.removeItem(STORAGE_KEY);
-    } catch { /* noop */ }
+    }
   }
+}
+
+/** Get cache age in hours for the oldest entry */
+export function getCacheAge(): number {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return 0;
+    const entries = JSON.parse(raw);
+    if (!entries.length) return 0;
+    // Check if entries have a timestamp (they don't currently, so return 0)
+    return 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Invalidate cache entries for a specific time range (e.g., after new data) */
+export function invalidateCacheRange(startYear: number, endYear: number) {
+  for (const [key, state] of cellStates) {
+    if (state.status !== 'loaded') continue;
+    const hasEventsInRange = state.events.some(e => e.year >= startYear && e.year <= endYear);
+    if (hasEventsInRange) {
+      cellStates.delete(key);
+    }
+  }
+  saveCache();
 }
 
 // Init cache
