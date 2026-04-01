@@ -62,6 +62,8 @@ export default function MythBuster({ onNavigate, onAskAI, onClose, centerYear, s
 
   const handleReveal = useCallback(() => {
     setRevealed(true);
+    // Award XP for revealing a myth
+    import('../services/gamification').then(g => g.recordMythRevealed());
   }, []);
 
   const handleCategoryChange = useCallback((cat: string) => {

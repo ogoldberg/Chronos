@@ -59,8 +59,15 @@ export default function ClassroomMode({ viewport, onNavigate, onClose }: Props) 
   const [voiceOn, setVoiceOn] = useState(false);
 
   const tour = selectedTour !== null ? PRESET_TOURS[selectedTour] : null;
+  const timerRef = useRef<number>(0);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => { clearTimeout(timerRef.current); stopSpeech(); };
+  }, []);
 
   const playStop = useCallback((stops: TourStop[], idx: number) => {
+    clearTimeout(timerRef.current);
     if (idx >= stops.length) {
       setPlaying(false);
       return;
@@ -71,14 +78,14 @@ export default function ClassroomMode({ viewport, onNavigate, onClose }: Props) 
     onNavigate(stop.year, stop.span);
 
     if (voiceOn) {
-      setTimeout(() => {
+      timerRef.current = window.setTimeout(() => {
         speak(stop.text, () => {
-          setTimeout(() => playStop(stops, idx + 1), 1000);
+          timerRef.current = window.setTimeout(() => playStop(stops, idx + 1), 1000);
         });
       }, 2000);
     } else {
       const delay = Math.max(stop.text.length * 40, 4000) + 2000;
-      setTimeout(() => playStop(stops, idx + 1), delay);
+      timerRef.current = window.setTimeout(() => playStop(stops, idx + 1), delay);
     }
   }, [onNavigate, voiceOn]);
 

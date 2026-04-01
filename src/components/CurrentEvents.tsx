@@ -16,7 +16,7 @@ interface ParallelEvent {
 interface Props {
   onClose: () => void;
   onNavigate: (year: number, span: number) => void;
-  onAddEvents: (events: any[]) => void;
+  onAddEvents: (events: ParallelEvent[]) => void;
 }
 
 const SUGGESTION_CHIPS = [

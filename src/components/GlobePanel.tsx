@@ -381,9 +381,25 @@ export default function GlobePanel({
     const paths = pathsRef.current;
     if (!markers || !paths) return;
 
-    // Clear existing
-    while (markers.children.length) markers.remove(markers.children[0]);
-    while (paths.children.length) paths.remove(paths.children[0]);
+    // Clear existing — dispose GPU resources to prevent memory leak
+    const disposeChild = (child: THREE.Object3D) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        if (child.material instanceof THREE.Material) child.material.dispose();
+      }
+      if (child instanceof THREE.Line) {
+        child.geometry?.dispose();
+        if (child.material instanceof THREE.Material) child.material.dispose();
+      }
+    };
+    while (markers.children.length) {
+      disposeChild(markers.children[0]);
+      markers.remove(markers.children[0]);
+    }
+    while (paths.children.length) {
+      disposeChild(paths.children[0]);
+      paths.remove(paths.children[0]);
+    }
 
     // Get events with geo data
     const geoEvents = events.filter(e => e.lat != null && e.lng != null);
