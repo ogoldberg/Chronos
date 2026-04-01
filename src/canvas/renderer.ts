@@ -43,55 +43,82 @@ export function renderTimeline(
   const timelineY = H * 0.52;
   const era = getEra(vp.centerYear);
 
-  // Background gradient
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#0a0a1a');
-  bg.addColorStop(0.5, '#0d1117');
-  bg.addColorStop(1, '#0a0a1a');
+  // Background — deep space gradient with subtle radial vignette
+  const bg = ctx.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, Math.max(W, H));
+  bg.addColorStop(0, '#0f1219');
+  bg.addColorStop(0.5, '#0a0d14');
+  bg.addColorStop(1, '#06080d');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Starfield
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  for (let i = 0; i < 80; i++) {
-    const sx = ((i * 137.5) % W);
-    const sy = ((i * 97.3 + 50) % H);
-    const size = ((i * 3.7) % 2) + 0.5;
+  // Animated starfield — twinkling stars with depth layers
+  const time = Date.now() * 0.001;
+  // Far stars (small, dim, slow twinkle)
+  for (let i = 0; i < 120; i++) {
+    const sx = ((i * 137.508) % W);
+    const sy = ((i * 97.31 + 30) % H);
+    const twinkle = 0.15 + Math.sin(time * 0.5 + i * 2.1) * 0.1;
+    const size = ((i * 3.71) % 1.2) + 0.3;
+    ctx.fillStyle = `rgba(200,210,255,${twinkle})`;
     ctx.beginPath();
     ctx.arc(sx, sy, size, 0, Math.PI * 2);
     ctx.fill();
   }
+  // Near stars (larger, brighter, faster twinkle)
+  for (let i = 0; i < 25; i++) {
+    const sx = ((i * 211.7 + 50) % W);
+    const sy = ((i * 173.9 + 20) % H);
+    const twinkle = 0.3 + Math.sin(time * 1.2 + i * 3.7) * 0.2;
+    const size = ((i * 2.3) % 1.5) + 0.8;
+    ctx.fillStyle = `rgba(255,255,255,${twinkle})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, size, 0, Math.PI * 2);
+    ctx.fill();
+    // Subtle cross-glow on brightest stars
+    if (twinkle > 0.4) {
+      ctx.strokeStyle = `rgba(255,255,255,${twinkle * 0.3})`;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(sx - 3, sy); ctx.lineTo(sx + 3, sy);
+      ctx.moveTo(sx, sy - 3); ctx.lineTo(sx, sy + 3);
+      ctx.stroke();
+    }
+  }
 
-  // Era color band
-  ctx.fillStyle = era.accent + '08';
+  // Era ambient wash — soft gradient overlay
+  const eraWash = ctx.createRadialGradient(W / 2, timelineY, 0, W / 2, timelineY, W * 0.6);
+  eraWash.addColorStop(0, era.accent + '0c');
+  eraWash.addColorStop(1, 'transparent');
+  ctx.fillStyle = eraWash;
   ctx.fillRect(0, 0, W, H);
 
-  // Era regions on timeline
+  // Era region bands with smooth edges
   for (let i = 0; i < ERAS.length; i++) {
     const eraStart = ERAS[i].start;
     const eraEnd = i < ERAS.length - 1 ? ERAS[i + 1].start : 2030;
     if (eraEnd < left || eraStart > right) continue;
     const x1 = Math.max(0, yearToPixel(eraStart, vp, W));
     const x2 = Math.min(W, yearToPixel(eraEnd, vp, W));
-    ctx.fillStyle = ERAS[i].accent + '0a';
-    ctx.fillRect(x1, timelineY - 40, x2 - x1, 80);
+    const bandGrad = ctx.createLinearGradient(x1, 0, x2, 0);
+    bandGrad.addColorStop(0, ERAS[i].accent + '00');
+    bandGrad.addColorStop(0.1, ERAS[i].accent + '08');
+    bandGrad.addColorStop(0.9, ERAS[i].accent + '08');
+    bandGrad.addColorStop(1, ERAS[i].accent + '00');
+    ctx.fillStyle = bandGrad;
+    ctx.fillRect(x1, timelineY - 50, x2 - x1, 100);
   }
 
-  // Timeline axis
-  const axGrad = ctx.createLinearGradient(0, 0, W, 0);
-  axGrad.addColorStop(0, era.accent + '20');
-  axGrad.addColorStop(0.5, era.accent + '60');
-  axGrad.addColorStop(1, era.accent + '20');
-  ctx.strokeStyle = axGrad;
-  ctx.lineWidth = 2;
+  // Timeline axis — triple-layer glow for depth
+  // Outer glow
+  ctx.strokeStyle = era.accent + '08';
+  ctx.lineWidth = 20;
   ctx.beginPath();
   ctx.moveTo(0, timelineY);
   ctx.lineTo(W, timelineY);
   ctx.stroke();
-
-  // Glow line
+  // Mid glow
   ctx.strokeStyle = era.accent + '15';
-  ctx.lineWidth = 8;
+  ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.moveTo(0, timelineY);
   ctx.lineTo(W, timelineY);
@@ -291,54 +318,78 @@ export function renderTimeline(
     const isHovered = hoveredId === ev.id;
     const isSelected = selectedId === ev.id;
 
-    // Connector line
-    ctx.strokeStyle = ev.color + (isHovered ? '80' : '40');
+    // Connector line — subtle gradient fade
+    const connGrad = ctx.createLinearGradient(x, timelineY, x, evY);
+    connGrad.addColorStop(0, ev.color + (isHovered ? '90' : '50'));
+    connGrad.addColorStop(1, ev.color + (isHovered ? '40' : '15'));
+    ctx.strokeStyle = connGrad;
     ctx.lineWidth = isHovered ? 2 : 1;
-    ctx.setLineDash(isHovered ? [] : [3, 3]);
+    ctx.setLineDash(isHovered ? [] : [2, 4]);
     ctx.beginPath();
     ctx.moveTo(x, timelineY);
     ctx.lineTo(x, evY);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Event dot on timeline
+    // Event dot on timeline axis with glow
+    if (isHovered || isSelected) {
+      ctx.beginPath();
+      ctx.arc(x, timelineY, 8, 0, Math.PI * 2);
+      ctx.fillStyle = ev.color + '20';
+      ctx.fill();
+    }
     ctx.beginPath();
     ctx.arc(x, timelineY, isHovered ? 5 : 3.5, 0, Math.PI * 2);
     ctx.fillStyle = ev.color;
     ctx.fill();
 
-    // Event marker
-    const markerSize = isHovered ? 22 : isSelected ? 20 : 18;
+    // Event marker — layered for depth
+    const markerSize = isHovered ? 24 : isSelected ? 22 : 18;
+
+    // Outer glow ring (hover/select)
     if (isHovered || isSelected) {
       ctx.shadowColor = ev.color;
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(x, evY, markerSize / 2 + 4, 0, Math.PI * 2);
+      ctx.fillStyle = ev.color + '15';
+      ctx.fill();
+      ctx.shadowBlur = 0;
     }
+
+    // Background circle
+    const markerGrad = ctx.createRadialGradient(x, evY - 2, 0, x, evY, markerSize / 2);
+    markerGrad.addColorStop(0, '#1a1f2e');
+    markerGrad.addColorStop(1, '#0d1117');
     ctx.beginPath();
     ctx.arc(x, evY, markerSize / 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#0d1117';
+    ctx.fillStyle = markerGrad;
     ctx.fill();
-    ctx.strokeStyle = ev.color + (isHovered ? 'ff' : '99');
-    ctx.lineWidth = isHovered ? 2.5 : 1.5;
+    ctx.strokeStyle = ev.color + (isHovered ? 'ff' : isSelected ? 'cc' : '70');
+    ctx.lineWidth = isHovered ? 2 : 1.5;
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // Emoji
-    ctx.font = `${markerSize * 0.65}px sans-serif`;
+    ctx.font = `${markerSize * 0.6}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(ev.emoji, x, evY + 1);
 
-    // Label
-    ctx.font = `${isHovered ? 'bold ' : ''}${isHovered ? 13 : 11}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    // Label with text shadow for readability
+    ctx.font = `${isHovered ? '600 ' : '400 '}${isHovered ? 13 : 11}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
+    // Text shadow
+    ctx.fillStyle = '#00000080';
+    ctx.fillText(ev.title, x + 0.5, evY + markerSize / 2 + 5.5);
+    // Text
     ctx.fillStyle = isHovered ? '#ffffff' : '#ffffffcc';
-    ctx.fillText(ev.title, x, evY + markerSize / 2 + 4);
+    ctx.fillText(ev.title, x, evY + markerSize / 2 + 5);
 
     // Year sub-label
-    ctx.font = `9px "SF Mono", monospace`;
-    ctx.fillStyle = ev.color + '99';
-    ctx.fillText(formatYearShort(ev.year), x, evY + markerSize / 2 + 20);
+    ctx.font = `9px "SF Mono", "Fira Code", monospace`;
+    ctx.fillStyle = ev.color + (isHovered ? 'cc' : '80');
+    ctx.fillText(formatYearShort(ev.year), x, evY + markerSize / 2 + 21);
   }
 
   // Render cluster bubbles for groups of 3+ events

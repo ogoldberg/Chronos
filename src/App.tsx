@@ -18,6 +18,7 @@ const GlobePanel = lazy(() => import('./components/GlobePanel'));
 const ChatPanel = lazy(() => import('./components/ChatPanel'));
 const ComparisonView = lazy(() => import('./components/ComparisonView'));
 const ClassroomMode = lazy(() => import('./components/ClassroomMode'));
+const CurrentEvents = lazy(() => import('./components/CurrentEvents'));
 import { REGION_LANES } from './data/regions';
 import './App.css';
 
@@ -37,6 +38,7 @@ export default function App() {
   const [showGlobe, setShowGlobe] = useState(true);
   const [showComparison, setShowComparison] = useState(false);
   const [showClassroom, setShowClassroom] = useState(false);
+  const [showCurrentEvents, setShowCurrentEvents] = useState(false);
   const [lanesEnabled, setLanesEnabled] = useState(false);
   const [activeLanes, setActiveLanes] = useState<Set<string>>(
     new Set(REGION_LANES.map(l => l.id))
@@ -417,29 +419,64 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* Classroom button */}
-      <button
-        onClick={() => setShowClassroom(true)}
-        style={{
-          position: 'absolute',
-          bottom: 20,
-          left: '50%',
-          transform: 'translateX(calc(-50% + 180px))',
-          background: 'rgba(13, 17, 23, 0.9)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 14,
-          padding: '6px 14px',
-          color: '#ffffff80',
-          fontSize: 11,
-          fontWeight: 600,
-          cursor: 'pointer',
-          backdropFilter: 'blur(10px)',
-          zIndex: 20,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        🎓 Classroom
-      </button>
+      {/* Current events panel */}
+      {showCurrentEvents && (
+        <Suspense fallback={null}>
+          <CurrentEvents
+            onNavigate={(y, s) => animateTo(y, s)}
+            onAddEvents={handleAddEvents}
+            onClose={() => setShowCurrentEvents(false)}
+          />
+        </Suspense>
+      )}
+
+      {/* Bottom toolbar — Classroom + Current Events */}
+      <div style={{
+        position: 'absolute',
+        bottom: 20,
+        left: '50%',
+        transform: 'translateX(calc(-50% + 160px))',
+        display: 'flex',
+        gap: 6,
+        zIndex: 20,
+      }}>
+        <button
+          onClick={() => setShowCurrentEvents(true)}
+          className="bottom-tool-btn"
+          style={{
+            background: 'rgba(13, 17, 23, 0.9)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 14,
+            padding: '6px 14px',
+            color: '#ffffff80',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+            backdropFilter: 'blur(10px)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          🔗 History Repeats
+        </button>
+        <button
+          onClick={() => setShowClassroom(true)}
+          className="bottom-tool-btn"
+          style={{
+            background: 'rgba(13, 17, 23, 0.9)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 14,
+            padding: '6px 14px',
+            color: '#ffffff80',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+            backdropFilter: 'blur(10px)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          🎓 Classroom
+        </button>
+      </div>
     </div>
   );
 }
