@@ -215,6 +215,45 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
+        {/* Confidence + Speculation notice */}
+        {event.confidence === 'speculative' && (
+          <div style={{
+            background: 'rgba(234, 179, 8, 0.08)',
+            border: '1px solid rgba(234, 179, 8, 0.2)',
+            borderRadius: 10,
+            padding: '10px 14px',
+            marginBottom: 12,
+            fontSize: 12,
+            color: '#eab308cc',
+            lineHeight: 1.5,
+          }}>
+            ⚠️ <strong>Speculative:</strong> {event.speculativeNote || 'This event involves scholarly debate or uncertain dating.'}
+          </div>
+        )}
+
+        {/* Citations */}
+        {event.citations && event.citations.length > 0 && (
+          <div style={{
+            marginBottom: 12,
+            fontSize: 11,
+            color: '#ffffff50',
+          }}>
+            <span style={{ fontWeight: 600, letterSpacing: 0.5 }}>Sources: </span>
+            {event.citations.map((cite, i) => (
+              <span key={i}>
+                {i > 0 && ' · '}
+                {cite.url ? (
+                  <a href={cite.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f680', textDecoration: 'none' }}>
+                    {cite.title || cite.source}
+                  </a>
+                ) : (
+                  <span>{cite.title || cite.source}</span>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Wikipedia content */}
         {loading && (
           <div style={{ color: '#ffffff60', fontSize: 13 }}>Loading Wikipedia data...</div>

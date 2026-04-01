@@ -38,8 +38,21 @@ export interface TimelineEvent {
   region?: [number, number][]; // [[lat,lng],...] polygon for territories
   geoType?: 'point' | 'path' | 'region' | 'battle' | 'storm';
 
+  // Citations and sourcing
+  citations?: Citation[];
+  confidence?: 'verified' | 'likely' | 'speculative'; // how certain is this?
+  speculativeNote?: string; // if speculative, explain why
+
   // Connections to other events (causality, influence, etc.)
   connections?: EventConnection[];
+}
+
+export interface Citation {
+  source: string;       // "Wikipedia", "Wikidata", "Britannica", "Web Search"
+  title: string;        // article/page title
+  url?: string;         // link to source
+  accessDate?: string;  // when it was accessed
+  quote?: string;       // specific passage supporting the claim
 }
 
 export interface EventConnection {
