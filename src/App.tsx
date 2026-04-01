@@ -18,6 +18,7 @@ import PanelRouter from './components/PanelRouter';
 import StatsBar from './features/gamification/StatsBar';
 import AchievementToast from './features/gamification/AchievementToast';
 import OnboardingOverlay, { triggerOnboarding, ShowMeAroundButton } from './features/onboarding/OnboardingOverlay';
+import CursorOverlay from './features/collaboration/CursorOverlay';
 import type { TimelineEvent } from './types';
 import './App.css';
 
@@ -251,6 +252,9 @@ export default function App() {
         </div>
       )}
 
+      {/* Cursor overlay for collaboration */}
+      <CursorOverlay />
+
       {/* Panel router — handles all lazy-loaded panels */}
       <PanelRouter />
 
@@ -285,6 +289,7 @@ export default function App() {
         {toolBtn('⏩ Time-lapse', 'timelapse')}
         {toolBtn('⚖️ Debate', 'debate')}
         {toolBtn('🌐 Community', 'community')}
+        {toolBtn('🤝 Collab', 'collaboration')}
         {toolBtn('📊 Data', 'overlays')}
         {toolBtn('📤 Export', 'export')}
         {toolBtn('👤 Account', 'auth')}

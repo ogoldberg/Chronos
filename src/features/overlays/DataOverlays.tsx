@@ -4,8 +4,15 @@ import {
   TEMPERATURE_ANOMALY,
   CO2_CONCENTRATION,
   GDP_ESTIMATES,
+  POPULATION_BY_REGION,
+  GDP_BY_CIVILIZATION,
+  TRADE_ROUTE_VOLUMES,
   type DataPoint,
+  type RegionDataSeries,
+  type CivGDPSeries,
+  type TradeRouteSeries,
 } from '../../data/climateData';
+import { REGION_LANES } from '../../data/regions';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getVisibleRange } from '../../canvas/viewport';
 
@@ -145,12 +152,127 @@ function drawOverlay(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Per-region drawing                                                 */
+/* ------------------------------------------------------------------ */
+
+function getRegionColor(regionId: string): string {
+  return REGION_LANES.find(r => r.id === regionId)?.color ?? '#ffffff';
+}
+
+type PerRegionMode = 'population' | 'gdp' | 'trade';
+
+function drawPerRegionOverlay(
+  ctx: CanvasRenderingContext2D,
+  mode: PerRegionMode,
+  enabledSeries: Record<string, boolean>,
+  left: number,
+  right: number,
+  width: number,
+  height: number,
+) {
+  let seriesList: { id: string; label: string; color: string; data: DataPoint[] }[] = [];
+
+  if (mode === 'population') {
+    seriesList = POPULATION_BY_REGION
+      .filter(s => enabledSeries[s.regionId] !== false)
+      .map(s => ({ id: s.regionId, label: s.label, color: getRegionColor(s.regionId), data: s.data }));
+  } else if (mode === 'gdp') {
+    seriesList = GDP_BY_CIVILIZATION
+      .filter(s => enabledSeries[s.id] !== false)
+      .map(s => ({ id: s.id, label: s.label, color: getRegionColor(s.regionId), data: s.data }));
+  } else {
+    seriesList = TRADE_ROUTE_VOLUMES
+      .filter(s => enabledSeries[s.id] !== false)
+      .map(s => ({ id: s.id, label: s.label, color: s.color, data: s.data }));
+  }
+
+  if (seriesList.length === 0) return;
+
+  // Compute global Y range across all series
+  let globalMin = Infinity;
+  let globalMax = -Infinity;
+  const margin = (right - left) * 0.05;
+  for (const series of seriesList) {
+    for (const d of series.data) {
+      if (d.year >= left - margin && d.year <= right + margin) {
+        const v = Math.log10(Math.max(d.value, 0.1));
+        if (v < globalMin) globalMin = v;
+        if (v > globalMax) globalMax = v;
+      }
+    }
+  }
+  if (!isFinite(globalMin) || globalMin === globalMax) { globalMin = 0; globalMax = 1; }
+  const yPad = (globalMax - globalMin) * 0.1;
+  globalMin -= yPad;
+  globalMax += yPad;
+
+  const CHART_TOP = 40;
+  const CHART_BOTTOM = height - 20;
+  const chartH = CHART_BOTTOM - CHART_TOP;
+
+  const toX = (year: number) => ((year - left) / (right - left)) * width;
+  const toY = (val: number) => {
+    const v = Math.log10(Math.max(val, 0.1));
+    return CHART_TOP + chartH - ((v - globalMin) / (globalMax - globalMin)) * chartH;
+  };
+
+  // Title
+  ctx.globalAlpha = 0.8;
+  ctx.font = 'bold 11px system-ui, sans-serif';
+  ctx.fillStyle = '#ffffffcc';
+  ctx.textAlign = 'left';
+  const titles: Record<string, string> = { population: 'Population by Region', gdp: 'GDP by Civilization', trade: 'Trade Route Volume' };
+  ctx.fillText(titles[mode] ?? '', 10, 16);
+
+  // Draw each series
+  const steps = Math.min(width, 400);
+  for (const series of seriesList) {
+    ctx.beginPath();
+    ctx.strokeStyle = series.color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.55;
+
+    let first = true;
+    for (let i = 0; i <= steps; i++) {
+      const year = left + (i / steps) * (right - left);
+      const val = interpolate(series.data, year);
+      if (val === null) continue;
+      const x = toX(year);
+      const y = toY(val);
+      if (first) { ctx.moveTo(x, y); first = false; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Legend
+  ctx.globalAlpha = 1;
+  let legendX = 10;
+  const legendY = height - 8;
+  ctx.font = '9px system-ui, sans-serif';
+  for (const series of seriesList) {
+    ctx.fillStyle = series.color;
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(legendX, legendY - 6, 10, 3);
+    ctx.fillText(series.label, legendX + 14, legendY - 2);
+    legendX += ctx.measureText(series.label).width + 24;
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+type TabMode = 'global' | 'perRegion';
+
 export default function DataOverlays() {
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<TabMode>('global');
+  const [perRegionMode, setPerRegionMode] = useState<PerRegionMode>('population');
+  const [seriesEnabled, setSeriesEnabled] = useState<Record<string, boolean>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const perRegionCanvasRef = useRef<HTMLCanvasElement>(null);
   const viewport = useTimelineStore(s => s.viewport);
 
   const activeOverlays = OVERLAYS.filter(o => enabled[o.key]);
@@ -179,7 +301,29 @@ export default function DataOverlays() {
 
   useEffect(() => { draw(); }, [draw]);
 
+  // Per-region draw
+  const drawPerRegion = useCallback(() => {
+    const canvas = perRegionCanvasRef.current;
+    if (!canvas || tab !== 'perRegion') return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const [left, right] = getVisibleRange(viewport);
+    drawPerRegionOverlay(ctx, perRegionMode, seriesEnabled, left, right, rect.width, rect.height);
+  }, [tab, perRegionMode, seriesEnabled, viewport]);
+
+  useEffect(() => { drawPerRegion(); }, [drawPerRegion]);
+
   const toggle = (key: string) => setEnabled(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleSeries = (id: string) => setSeriesEnabled(prev => ({ ...prev, [id]: prev[id] === false ? true : false }));
 
   const hasAny = activeOverlays.length > 0;
 
@@ -193,60 +337,175 @@ export default function DataOverlays() {
             Data Overlays
           </span>
         </div>
-        <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {OVERLAYS.map(o => (
-            <label
-              key={o.key}
+
+        {/* Tab switcher */}
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          {(['global', 'perRegion'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
+                flex: 1,
+                background: tab === t ? 'rgba(255,255,255,0.06)' : 'transparent',
+                border: 'none',
+                borderBottom: tab === t ? '2px solid #6495ed' : '2px solid transparent',
+                color: tab === t ? '#ffffffcc' : '#ffffff50',
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '6px 0',
                 cursor: 'pointer',
-                padding: '4px 0',
+                letterSpacing: 0.3,
               }}
             >
-              {/* Toggle switch */}
-              <div
-                onClick={() => toggle(o.key)}
-                style={{
-                  width: 32,
-                  height: 16,
-                  borderRadius: 8,
-                  background: enabled[o.key] ? `${o.color}60` : 'rgba(255,255,255,0.1)',
-                  position: 'relative',
-                  transition: 'background 0.2s',
-                  flexShrink: 0,
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  background: enabled[o.key] ? o.color : '#ffffff40',
-                  position: 'absolute',
-                  top: 2,
-                  left: enabled[o.key] ? 18 : 2,
-                  transition: 'left 0.2s, background 0.2s',
-                }} />
-              </div>
-              <span style={{
-                fontSize: 11,
-                color: enabled[o.key] ? o.color : '#ffffff60',
-                fontWeight: enabled[o.key] ? 600 : 400,
-                transition: 'color 0.2s',
-              }}>
-                {o.label}
-              </span>
-            </label>
+              {t === 'global' ? 'Global' : 'Per Region'}
+            </button>
           ))}
         </div>
+
+        {/* Global toggles */}
+        {tab === 'global' && (
+          <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {OVERLAYS.map(o => (
+              <label
+                key={o.key}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                  padding: '4px 0',
+                }}
+              >
+                <div
+                  onClick={() => toggle(o.key)}
+                  style={{
+                    width: 32,
+                    height: 16,
+                    borderRadius: 8,
+                    background: enabled[o.key] ? `${o.color}60` : 'rgba(255,255,255,0.1)',
+                    position: 'relative',
+                    transition: 'background 0.2s',
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    background: enabled[o.key] ? o.color : '#ffffff40',
+                    position: 'absolute',
+                    top: 2,
+                    left: enabled[o.key] ? 18 : 2,
+                    transition: 'left 0.2s, background 0.2s',
+                  }} />
+                </div>
+                <span style={{
+                  fontSize: 11,
+                  color: enabled[o.key] ? o.color : '#ffffff60',
+                  fontWeight: enabled[o.key] ? 600 : 400,
+                  transition: 'color 0.2s',
+                }}>
+                  {o.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {/* Per Region controls */}
+        {tab === 'perRegion' && (
+          <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {/* Mode selector */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+              {([
+                { key: 'population' as const, label: 'Pop' },
+                { key: 'gdp' as const, label: 'GDP' },
+                { key: 'trade' as const, label: 'Trade' },
+              ]).map(m => (
+                <button
+                  key={m.key}
+                  onClick={() => setPerRegionMode(m.key)}
+                  style={{
+                    flex: 1,
+                    background: perRegionMode === m.key ? 'rgba(100,149,237,0.2)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${perRegionMode === m.key ? 'rgba(100,149,237,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                    borderRadius: 4,
+                    padding: '3px 0',
+                    color: perRegionMode === m.key ? '#6495ed' : '#ffffff50',
+                    fontSize: 9,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Series toggles */}
+            {perRegionMode === 'population' && POPULATION_BY_REGION.map(s => {
+              const color = getRegionColor(s.regionId);
+              const on = seriesEnabled[s.regionId] !== false;
+              return (
+                <label key={s.regionId} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '2px 0' }}>
+                  <div
+                    onClick={() => toggleSeries(s.regionId)}
+                    style={{ width: 10, height: 10, borderRadius: 2, background: on ? color : 'rgba(255,255,255,0.1)', cursor: 'pointer', flexShrink: 0, opacity: on ? 0.8 : 0.3 }}
+                  />
+                  <span style={{ fontSize: 10, color: on ? color : '#ffffff40' }}>{s.label}</span>
+                </label>
+              );
+            })}
+            {perRegionMode === 'gdp' && GDP_BY_CIVILIZATION.map(s => {
+              const color = getRegionColor(s.regionId);
+              const on = seriesEnabled[s.id] !== false;
+              return (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '2px 0' }}>
+                  <div
+                    onClick={() => toggleSeries(s.id)}
+                    style={{ width: 10, height: 10, borderRadius: 2, background: on ? color : 'rgba(255,255,255,0.1)', cursor: 'pointer', flexShrink: 0, opacity: on ? 0.8 : 0.3 }}
+                  />
+                  <span style={{ fontSize: 10, color: on ? color : '#ffffff40' }}>{s.label}</span>
+                </label>
+              );
+            })}
+            {perRegionMode === 'trade' && TRADE_ROUTE_VOLUMES.map(s => {
+              const on = seriesEnabled[s.id] !== false;
+              return (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '2px 0' }}>
+                  <div
+                    onClick={() => toggleSeries(s.id)}
+                    style={{ width: 10, height: 10, borderRadius: 2, background: on ? s.color : 'rgba(255,255,255,0.1)', cursor: 'pointer', flexShrink: 0, opacity: on ? 0.8 : 0.3 }}
+                  />
+                  <span style={{ fontSize: 10, color: on ? s.color : '#ffffff40' }}>{s.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Canvas overlay on the timeline */}
+      {/* Canvas overlay on the timeline (global) */}
       {hasAny && (
         <canvas
           ref={canvasRef}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            pointerEvents: 'none',
+            zIndex: 5,
+          }}
+        />
+      )}
+
+      {/* Canvas overlay on the timeline (per region) */}
+      {tab === 'perRegion' && (
+        <canvas
+          ref={perRegionCanvasRef}
           style={{
             position: 'fixed',
             top: 0,

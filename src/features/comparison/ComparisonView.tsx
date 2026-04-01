@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Viewport, TimelineEvent } from '../../types';
 import { formatYear, formatYearShort } from '../../utils/format';
 import { yearToPixel } from '../../canvas/viewport';
 import { REGION_LANES, matchEventToRegion } from '../../data/regions';
+import { speak, stopSpeech, isSpeaking } from '../../utils/speech';
 
 interface Props {
   viewport: Viewport;
@@ -16,6 +17,67 @@ export default function ComparisonView({ viewport, events, onClose, onSelectEven
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 800, h: 400 });
+
+  // Narration state
+  const [narration, setNarration] = useState('');
+  const [narrationLoading, setNarrationLoading] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const narrationRequestRef = useRef(0);
+
+  const fetchNarration = useCallback(async () => {
+    if (selectedRegions.length === 0) return;
+    const requestId = ++narrationRequestRef.current;
+    setNarrationLoading(true);
+    stopSpeech();
+    setSpeaking(false);
+
+    const startYear = Math.round(viewport.centerYear - viewport.span / 2);
+    const endYear = Math.round(viewport.centerYear + viewport.span / 2);
+    const visibleEvents = events
+      .filter(ev => ev.year >= startYear && ev.year <= endYear)
+      .map(ev => ev.title)
+      .slice(0, 20);
+
+    try {
+      const res = await fetch('/api/comparison-narrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          regions: selectedRegions,
+          startYear,
+          endYear,
+          events: visibleEvents,
+        }),
+      });
+      if (requestId !== narrationRequestRef.current) return;
+      if (!res.ok) { setNarration(''); setNarrationLoading(false); return; }
+      const data = await res.json();
+      const text = data.narration || '';
+      setNarration(text);
+      if (voiceEnabled && text) {
+        setSpeaking(true);
+        speak(text, () => setSpeaking(false));
+      }
+    } catch {
+      if (requestId === narrationRequestRef.current) setNarration('');
+    } finally {
+      if (requestId === narrationRequestRef.current) setNarrationLoading(false);
+    }
+  }, [selectedRegions, viewport.centerYear, viewport.span, events, voiceEnabled]);
+
+  // Auto-update narration when viewport or regions change (debounced)
+  useEffect(() => {
+    if (!narration && !narrationLoading) return; // only auto-update if narration was previously requested
+    const timer = setTimeout(() => { fetchNarration(); }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewport.centerYear, viewport.span, selectedRegions]);
+
+  const toggleVoice = () => {
+    if (speaking) { stopSpeech(); setSpeaking(false); }
+    setVoiceEnabled(v => !v);
+  };
 
   // Resize
   useEffect(() => {
@@ -198,6 +260,39 @@ export default function ComparisonView({ viewport, events, onClose, onSelectEven
         </div>
 
         <button
+          onClick={fetchNarration}
+          disabled={narrationLoading || selectedRegions.length === 0}
+          style={{
+            background: narrationLoading ? 'rgba(255,255,255,0.05)' : 'rgba(100,149,237,0.15)',
+            border: '1px solid rgba(100,149,237,0.3)',
+            borderRadius: 6,
+            padding: '3px 10px',
+            color: narrationLoading ? '#ffffff40' : '#6495ed',
+            fontSize: 11,
+            cursor: narrationLoading ? 'wait' : 'pointer',
+            fontWeight: 600,
+          }}
+        >
+          {narrationLoading ? 'Narrating...' : 'Narrate'}
+        </button>
+
+        <button
+          onClick={toggleVoice}
+          title={voiceEnabled ? 'Disable voice narration' : 'Enable voice narration'}
+          style={{
+            background: voiceEnabled ? 'rgba(34,197,94,0.15)' : 'transparent',
+            border: `1px solid ${voiceEnabled ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.08)'}`,
+            borderRadius: 6,
+            padding: '3px 8px',
+            color: voiceEnabled ? '#22c55e' : '#ffffff40',
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          {speaking ? '🔊' : '🔈'}
+        </button>
+
+        <button
           onClick={onClose}
           style={{
             background: 'none',
@@ -213,9 +308,37 @@ export default function ComparisonView({ viewport, events, onClose, onSelectEven
       </div>
 
       {/* Canvas */}
-      <div ref={containerRef} style={{ flex: 1, position: 'relative' }}>
+      <div ref={containerRef} style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
       </div>
+
+      {/* Narration panel */}
+      {narration && (
+        <div style={{
+          padding: '14px 20px',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          maxHeight: 160,
+          overflowY: 'auto',
+          background: 'rgba(10, 10, 26, 0.6)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 12 }}>🎙️</span>
+            <span style={{ color: '#ffffffaa', fontSize: 11, fontWeight: 600, letterSpacing: 0.3 }}>
+              AI NARRATION
+            </span>
+          </div>
+          <p style={{
+            color: '#ffffffcc',
+            fontSize: 12,
+            lineHeight: 1.7,
+            margin: 0,
+            whiteSpace: 'pre-wrap',
+            fontFamily: 'Georgia, serif',
+          }}>
+            {narration}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

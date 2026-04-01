@@ -24,6 +24,7 @@ const CommunityHub = lazy(() => import('../features/community/CommunityHub'));
 const DataOverlays = lazy(() => import('../features/overlays/DataOverlays'));
 const TeacherDashboard = lazy(() => import('../features/classroom/TeacherDashboard'));
 const StudentView = lazy(() => import('../features/classroom/StudentView'));
+const CollaborationPanel = lazy(() => import('../features/collaboration/CollaborationPanel'));
 
 export default function PanelRouter() {
   const activePanel = useUIStore(s => s.activePanel);
@@ -170,6 +171,9 @@ export default function PanelRouter() {
       )}
       {activePanel === 'student' && (
         <StudentView onClose={closePanel} />
+      )}
+      {activePanel === 'collaboration' && (
+        <CollaborationPanel />
       )}
       {activePanel === 'help' && (
         <KeyboardHelpInline onClose={closePanel} />

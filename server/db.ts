@@ -267,6 +267,24 @@ CREATE INDEX IF NOT EXISTS idx_curricula_teacher ON curricula (teacher_id);
 CREATE INDEX IF NOT EXISTS idx_classrooms_teacher ON classrooms (teacher_id);
 CREATE INDEX IF NOT EXISTS idx_classrooms_code ON classrooms (join_code);
 CREATE INDEX IF NOT EXISTS idx_classroom_students_classroom ON classroom_students (classroom_id);
+
+-- ═══ Moderation Queue ═══
+
+CREATE TABLE IF NOT EXISTS moderation_queue (
+  id              SERIAL PRIMARY KEY,
+  contribution_type TEXT NOT NULL DEFAULT 'event',
+  title           TEXT NOT NULL,
+  content         JSONB DEFAULT '{}',
+  submitted_by    TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'pending',
+  reviewed_by     TEXT,
+  reviewed_at     TIMESTAMPTZ,
+  reject_reason   TEXT,
+  submitted_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_moderation_status ON moderation_queue (status);
+CREATE INDEX IF NOT EXISTS idx_moderation_submitted ON moderation_queue (submitted_at);
 `;
 
 // ─── Queries ───

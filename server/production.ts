@@ -7,6 +7,7 @@
  */
 
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { handleApiRequest, handleStreamRequest, setDbReady } from './api';
@@ -14,6 +15,7 @@ import { getProvider } from './providers/index';
 import { initDB } from './db';
 import { initAuth, getAuth } from './auth';
 import { toNodeHandler } from 'better-auth/node';
+import { attachWebSocketServer } from './websocket';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -86,7 +88,10 @@ async function main() {
     res.sendFile(path.join(STATIC_DIR, 'index.html'));
   });
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = http.createServer(app);
+  attachWebSocketServer(httpServer);
+
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[CHRONOS] Production server running on port ${PORT}`);
     console.log(`[CHRONOS] Static assets: ${STATIC_DIR}`);
   });

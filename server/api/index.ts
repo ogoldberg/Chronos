@@ -24,6 +24,8 @@ import { registerUserRoutes } from './routes/user';
 import { registerConfigRoutes } from './routes/config';
 import { registerCommunityRoutes } from './routes/community';
 import { registerCurriculumRoutes } from './routes/curriculum';
+import { registerComparisonRoutes } from './routes/comparison';
+import { registerModerationRoutes } from './routes/moderation';
 
 export { handleStreamRequest };
 
@@ -82,6 +84,8 @@ registerUserRoutes(handleRoute, isDbReady);
 registerConfigRoutes(handleRoute);
 registerCommunityRoutes(handleRoute);
 registerCurriculumRoutes(handleRoute, isDbReady);
+registerComparisonRoutes(handleRoute);
+registerModerationRoutes(handleRoute, isDbReady);
 
 // ── Request dispatcher ───────────────────────────────────────────────
 

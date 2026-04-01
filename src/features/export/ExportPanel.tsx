@@ -8,6 +8,7 @@ import {
   copyToClipboard,
 } from '../../utils/export';
 import { formatYear } from '../../utils/format';
+import { printTimeline, downloadTimelineHTML } from './printExport';
 
 interface Props {
   viewport: Viewport;
@@ -100,6 +101,18 @@ export default function ExportPanel({ viewport, events, onClose }: Props) {
           label={copied === 'embed' ? '✓ Copied!' : 'Copy Embed Code'}
           desc="<iframe> snippet for your website"
           onClick={handleEmbed}
+        />
+        <ExportButton
+          emoji="🖨️"
+          label="Print / PDF"
+          desc="Open print dialog for current view"
+          onClick={() => printTimeline(events, viewport)}
+        />
+        <ExportButton
+          emoji="📄"
+          label="Download HTML"
+          desc="Styled offline timeline document"
+          onClick={() => downloadTimelineHTML(events, viewport)}
         />
       </div>
     </div>
