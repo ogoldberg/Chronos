@@ -39,4 +39,38 @@ export class GoogleProvider implements AIProvider {
 
     return { text: result.response.text() };
   }
+
+  async chatStream(
+    system: string,
+    messages: AIMessage[],
+    onToken: (token: string) => void,
+    options?: { maxTokens?: number },
+  ): Promise<AIResponse> {
+    const model = this.genAI.getGenerativeModel({
+      model: this.model,
+      systemInstruction: system,
+      generationConfig: {
+        maxOutputTokens: options?.maxTokens || this.maxTokens,
+      },
+    });
+
+    const history = messages.slice(0, -1).map(m => ({
+      role: m.role === 'assistant' ? 'model' as const : 'user' as const,
+      parts: [{ text: m.content }],
+    }));
+
+    const chat = model.startChat({ history });
+    const lastMsg = messages[messages.length - 1];
+    const result = await chat.sendMessageStream(lastMsg?.content || '');
+
+    let fullText = '';
+    for await (const chunk of result.stream) {
+      const text = chunk.text();
+      if (text) {
+        fullText += text;
+        onToken(text);
+      }
+    }
+    return { text: fullText };
+  }
 }

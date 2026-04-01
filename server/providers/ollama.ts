@@ -44,4 +44,49 @@ export class OllamaProvider implements AIProvider {
     const data = await resp.json();
     return { text: data.message?.content || '' };
   }
+
+  async chatStream(
+    system: string,
+    messages: AIMessage[],
+    onToken: (token: string) => void,
+    options?: { maxTokens?: number },
+  ): Promise<AIResponse> {
+    const resp = await fetch(`${this.baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: this.model,
+        stream: true,
+        options: { num_predict: options?.maxTokens || this.maxTokens },
+        messages: [
+          { role: 'system', content: system },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+        ],
+      }),
+    });
+
+    if (!resp.ok || !resp.body) {
+      throw new Error(`Ollama error: ${resp.status}`);
+    }
+
+    let fullText = '';
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = decoder.decode(value, { stream: true }).split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line);
+          if (data.message?.content) {
+            fullText += data.message.content;
+            onToken(data.message.content);
+          }
+        } catch { /* skip malformed lines */ }
+      }
+    }
+    return { text: fullText };
+  }
 }

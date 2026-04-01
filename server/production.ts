@@ -9,7 +9,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { handleApiRequest } from './api';
+import { handleApiRequest, handleStreamRequest } from './api';
 import { getProvider } from './providers/index';
 import { initDB } from './db';
 
@@ -37,6 +37,16 @@ async function main() {
 
   // JSON body parser for API routes
   app.use('/api', express.json({ limit: '1mb' }));
+
+  // Streaming chat endpoint
+  app.post('/api/chat/stream', async (req, res) => {
+    try {
+      await handleStreamRequest(req.body || {}, res);
+    } catch (err: any) {
+      console.error('[API] stream error:', err.message);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    }
+  });
 
   // API routes
   app.all('/api/*', async (req, res) => {

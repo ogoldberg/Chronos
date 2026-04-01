@@ -63,6 +63,36 @@ export class OpenAIProvider implements AIProvider {
     return { text: resp.choices[0]?.message?.content || '' };
   }
 
+  async chatStream(
+    system: string,
+    messages: AIMessage[],
+    onToken: (token: string) => void,
+    options?: { maxTokens?: number },
+  ): Promise<AIResponse> {
+    const stream = await this.client.chat.completions.create({
+      model: this.model,
+      max_tokens: options?.maxTokens || this.maxTokens,
+      stream: true,
+      messages: [
+        { role: 'system', content: system },
+        ...messages.map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })),
+      ],
+    });
+
+    let fullText = '';
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) {
+        fullText += delta;
+        onToken(delta);
+      }
+    }
+    return { text: fullText };
+  }
+
   private supportsWebSearch(): boolean {
     // Web search is available on gpt-4o and similar models
     return this.model.startsWith('gpt-4') || this.model.startsWith('o');

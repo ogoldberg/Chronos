@@ -77,7 +77,12 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
 
     try {
       const history = messages.slice(-12).map(m => ({ role: m.role, content: m.content }));
-      const resp = await fetch('/api/chat', {
+
+      // Stream the response token by token
+      let content = '';
+      const streamingMsgIndex = messages.length + 1; // +1 for user msg we just added
+
+      const resp = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,8 +91,58 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
         }),
       });
 
-      const data = await resp.json();
-      let content = data.content || "Sorry, I had trouble connecting. Try again?";
+      if (!resp.ok || !resp.body) {
+        // Fallback to non-streaming
+        const fallback = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [...history, { role: 'user', content: text }],
+            context: buildContext(),
+          }),
+        });
+        const data = await fallback.json();
+        content = data.content || "Sorry, I had trouble connecting. Try again?";
+      } else {
+        // Add empty assistant message that we'll stream into
+        setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.token) {
+                content += data.token;
+                // Update the streaming message in place
+                setMessages(prev => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = { role: 'assistant', content };
+                  return updated;
+                });
+              }
+              if (data.error) {
+                content = data.error;
+              }
+            } catch { /* skip */ }
+          }
+        }
+        // Remove the streaming placeholder — we'll re-add after processing
+        setMessages(prev => prev.slice(0, -1));
+      }
+
+      if (!content) content = "Sorry, I had trouble connecting. Try again?";
 
       // Extract GOTO commands
       const gotoMatches = [...content.matchAll(/\[\[GOTO:([-\d.e]+),([-\d.e]+)\]\]/g)];

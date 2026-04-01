@@ -143,6 +143,31 @@ export async function handleApiRequest(
   return { status: 404, data: { error: 'Not found' } };
 }
 
+/** Handle streaming chat via Server-Sent Events */
+export async function handleStreamRequest(body: any, res: any): Promise<void> {
+  const ai = getProvider();
+  const { messages, context } = body;
+  const system = CHAT_SYSTEM(context);
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  try {
+    await ai.chatStream(system, messages, (token) => {
+      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    }, { maxTokens: 2000, webSearch: true });
+
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+  } catch (err: any) {
+    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+  }
+  res.end();
+}
+
 /** Vite plugin — wraps handleApiRequest for dev server */
 export function apiPlugin(): Plugin {
   return {
@@ -165,6 +190,13 @@ export function apiPlugin(): Plugin {
         if (!url.startsWith('/api/')) return next();
 
         try {
+          // Streaming chat endpoint
+          if (req.method === 'POST' && url === '/api/chat/stream') {
+            const body = await parseBody(req);
+            await handleStreamRequest(body, res);
+            return;
+          }
+
           const body = req.method === 'POST' ? await parseBody(req) : {};
           const result = await handleApiRequest(req.method || 'GET', url, body);
           res.writeHead(result.status, { 'Content-Type': 'application/json' });

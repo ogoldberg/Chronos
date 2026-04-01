@@ -44,4 +44,34 @@ export class AnthropicProvider implements AIProvider {
 
     return { text };
   }
+
+  async chatStream(
+    system: string,
+    messages: AIMessage[],
+    onToken: (token: string) => void,
+    options?: { maxTokens?: number; webSearch?: boolean },
+  ): Promise<AIResponse> {
+    const useWebSearch = options?.webSearch ?? this.webSearch;
+
+    const stream = this.client.messages.stream({
+      model: this.model,
+      max_tokens: options?.maxTokens || this.maxTokens,
+      system,
+      ...(useWebSearch
+        ? { tools: [{ type: 'web_search_20250305' as any, name: 'web_search' }] }
+        : {}),
+      messages: messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    });
+
+    let fullText = '';
+    stream.on('text', (text) => {
+      fullText += text;
+      onToken(text);
+    });
+
+    await stream.finalMessage();
+    return { text: fullText };
+  }
 }

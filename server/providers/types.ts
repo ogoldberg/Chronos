@@ -36,13 +36,21 @@ export interface AIProvider {
 
   /**
    * Send a message and get a text response.
-   * @param system - System prompt
-   * @param messages - Conversation history
-   * @param options - Per-request overrides
    */
   chat(
     system: string,
     messages: AIMessage[],
+    options?: { maxTokens?: number; webSearch?: boolean },
+  ): Promise<AIResponse>;
+
+  /**
+   * Stream a response token by token.
+   * Calls onToken for each chunk, returns the full text when done.
+   */
+  chatStream(
+    system: string,
+    messages: AIMessage[],
+    onToken: (token: string) => void,
     options?: { maxTokens?: number; webSearch?: boolean },
   ): Promise<AIResponse>;
 }
