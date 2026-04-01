@@ -19,6 +19,12 @@ const ChatPanel = lazy(() => import('./components/ChatPanel'));
 const ComparisonView = lazy(() => import('./components/ComparisonView'));
 const ClassroomMode = lazy(() => import('./components/ClassroomMode'));
 const CurrentEvents = lazy(() => import('./components/CurrentEvents'));
+const MythBuster = lazy(() => import('./components/MythBuster'));
+const QuizPanel = lazy(() => import('./components/QuizPanel'));
+const AuthPanel = lazy(() => import('./components/AuthPanel'));
+import StatsBar from './components/StatsBar';
+import AchievementToast from './components/AchievementToast';
+import { recordEventView } from './services/gamification';
 import { REGION_LANES } from './data/regions';
 import './App.css';
 
@@ -39,6 +45,9 @@ export default function App() {
   const [showComparison, setShowComparison] = useState(false);
   const [showClassroom, setShowClassroom] = useState(false);
   const [showCurrentEvents, setShowCurrentEvents] = useState(false);
+  const [showMyths, setShowMyths] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const [lanesEnabled, setLanesEnabled] = useState(false);
   const [activeLanes, setActiveLanes] = useState<Set<string>>(
     new Set(REGION_LANES.map(l => l.id))
@@ -198,6 +207,14 @@ export default function App() {
     stopSpeech();
   }, []);
 
+  // Track event views for gamification
+  const handleSelectEvent = useCallback((ev: TimelineEvent | null) => {
+    setSelectedEvent(ev);
+    if (ev) {
+      recordEventView();
+    }
+  }, []);
+
   const resumeTour = useCallback(() => {
     if (tourStops) playTourStop(tourStops, tourIndex);
   }, [tourStops, tourIndex, playTourStop]);
@@ -277,6 +294,26 @@ export default function App() {
     });
   }, []);
 
+  const toolBtnStyle = (label: string, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      style={{
+        background: 'rgba(13, 17, 23, 0.9)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 14,
+        padding: '6px 14px',
+        color: '#ffffff80',
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: 'pointer',
+        backdropFilter: 'blur(10px)',
+        whiteSpace: 'nowrap' as const,
+      }}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="chronos-root">
       <TimelineCanvas
@@ -285,7 +322,7 @@ export default function App() {
         selectedId={selectedEvent?.id ?? null}
         activeLanes={lanesEnabled ? activeLanes : undefined}
         onViewportChange={setViewport}
-        onSelectEvent={setSelectedEvent}
+        onSelectEvent={handleSelectEvent}
         onHoverEvent={setHoveredEvent}
       />
 
@@ -403,7 +440,7 @@ export default function App() {
             viewport={viewport}
             events={allEvents}
             onClose={() => setShowComparison(false)}
-            onSelectEvent={setSelectedEvent}
+            onSelectEvent={handleSelectEvent}
           />
         </Suspense>
       )}
@@ -458,25 +495,49 @@ export default function App() {
         >
           🔗 History Repeats
         </button>
-        <button
-          onClick={() => setShowClassroom(true)}
-          className="bottom-tool-btn"
-          style={{
-            background: 'rgba(13, 17, 23, 0.9)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 14,
-            padding: '6px 14px',
-            color: '#ffffff80',
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: 'pointer',
-            backdropFilter: 'blur(10px)',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          🎓 Classroom
-        </button>
+        {toolBtnStyle('🔍 Myth Buster', () => setShowMyths(true))}
+        {toolBtnStyle('🧠 Quiz', () => setShowQuiz(true))}
+        {toolBtnStyle('🎓 Classroom', () => setShowClassroom(true))}
+        {toolBtnStyle('👤 Account', () => setShowAuth(true))}
       </div>
+
+      {/* Myth Buster */}
+      {showMyths && (
+        <Suspense fallback={null}>
+          <MythBuster
+            onNavigate={(y, s) => animateTo(y, s)}
+            onAskAI={(q) => { setShowMyths(false); setChatInitMsg(q); }}
+            centerYear={viewport.centerYear}
+            span={viewport.span}
+          />
+        </Suspense>
+      )}
+
+      {/* Quiz */}
+      {showQuiz && (
+        <Suspense fallback={null}>
+          <QuizPanel
+            recentEvents={visibleEvents.slice(0, 10).map(e => e.title)}
+            era={scaleLabel(viewport.span)}
+          />
+        </Suspense>
+      )}
+
+      {/* Auth */}
+      {showAuth && (
+        <>
+          <div className="overlay-backdrop" onClick={() => setShowAuth(false)} />
+          <Suspense fallback={null}>
+            <AuthPanel onClose={() => setShowAuth(false)} />
+          </Suspense>
+        </>
+      )}
+
+      {/* Stats bar (self-managed state) */}
+      <StatsBar />
+
+      {/* Achievement toast (self-managed via gamification service) */}
+      <AchievementToast />
     </div>
   );
 }
