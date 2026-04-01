@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { TimelineEvent, WikiData } from '../types';
 import { formatYear } from '../utils/format';
+import { getShareURL } from '../utils/urlState';
 import { fetchWikiSummary } from '../services/wikipediaApi';
 
 interface Props {
@@ -305,6 +306,29 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
             }}
           >
             💬 Ask Guide
+          </button>
+          <button
+            onClick={() => {
+              const url = window.location.href;
+              navigator.clipboard.writeText(url).then(() => {
+                const btn = document.activeElement as HTMLButtonElement;
+                if (btn) { btn.textContent = '✓ Copied!'; setTimeout(() => { btn.textContent = '🔗 Share'; }, 1500); }
+              });
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '8px 14px',
+              background: 'rgba(255,255,255,0.08)',
+              borderRadius: 8,
+              color: '#ffffffaa',
+              fontSize: 12,
+              border: '1px solid rgba(255,255,255,0.1)',
+              cursor: 'pointer',
+            }}
+          >
+            🔗 Share
           </button>
         </div>
       </div>

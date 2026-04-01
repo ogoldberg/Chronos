@@ -1,23 +1,30 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, lazy, Suspense } from 'react';
 import type { TimelineEvent, Viewport, TourStop } from './types';
 import { ANCHOR_EVENTS } from './data/anchorEvents';
 import { clamp, formatYearShort, scaleLabel } from './utils/format';
 import { getVisibleRange } from './canvas/viewport';
 import { speak, stopSpeech } from './utils/speech';
 import { discoverEvents, getCacheStats } from './services/eventDiscovery';
+import { readURLState, writeURLState } from './utils/urlState';
 import TimelineCanvas from './canvas/TimelineCanvas';
 import EraChips from './components/EraChips';
 import EventCard from './components/EventCard';
 import InsightsPanel from './components/InsightsPanel';
-import ChatPanel from './components/ChatPanel';
 import TourOverlay from './components/TourOverlay';
-import GlobePanel from './components/GlobePanel';
 import LaneToggle from './components/LaneToggle';
+
+// Lazy-loaded heavy components (Three.js globe, chat panel)
+const GlobePanel = lazy(() => import('./components/GlobePanel'));
+const ChatPanel = lazy(() => import('./components/ChatPanel'));
 import { REGION_LANES } from './data/regions';
 import './App.css';
 
 export default function App() {
-  const [viewport, setViewport] = useState<Viewport>({ centerYear: -4e9, span: 2.8e10 });
+  // Initialize from URL state if present
+  const urlState = useMemo(() => readURLState(), []);
+  const [viewport, setViewport] = useState<Viewport>(
+    urlState.viewport || { centerYear: -4e9, span: 2.8e10 }
+  );
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<TimelineEvent | null>(null);
   const [dynamicEvents, setDynamicEvents] = useState<TimelineEvent[]>([]);
@@ -96,6 +103,16 @@ export default function App() {
   useEffect(() => {
     existingTitlesRef.current = new Set(allEvents.map(e => e.title));
   }, [allEvents]);
+
+  // Sync viewport to URL (debounced)
+  const urlTimerRef = useRef<number>(0);
+  useEffect(() => {
+    clearTimeout(urlTimerRef.current);
+    urlTimerRef.current = window.setTimeout(() => {
+      writeURLState(viewport, selectedEvent?.id, lanesEnabled);
+    }, 500);
+    return () => clearTimeout(urlTimerRef.current);
+  }, [viewport, selectedEvent, lanesEnabled]);
 
   useEffect(() => {
     clearTimeout(discoverTimerRef.current);
@@ -263,8 +280,9 @@ export default function App() {
 
       <InsightsPanel viewport={viewport} visibleEvents={visibleEvents} />
 
-      {/* Globe panel */}
+      {/* Globe panel (lazy-loaded — Three.js is 500KB+) */}
       {showGlobe && (
+        <Suspense fallback={null}>
         <GlobePanel
           events={visibleEvents}
           selectedEvent={selectedEvent}
@@ -272,6 +290,7 @@ export default function App() {
           isCosmicScale={viewport.span > 1e8}
           onClose={() => setShowGlobe(false)}
         />
+        </Suspense>
       )}
       {!showGlobe && (
         <button
@@ -283,15 +302,17 @@ export default function App() {
         </button>
       )}
 
-      <ChatPanel
-        viewport={viewport}
-        visibleEvents={visibleEvents}
-        selectedEvent={selectedEvent}
-        onNavigate={(y, s) => animateTo(y, s)}
-        onStartTour={handleStartTour}
-        onAddEvents={handleAddEvents}
-        initialMessage={chatInitMsg}
-      />
+      <Suspense fallback={null}>
+        <ChatPanel
+          viewport={viewport}
+          visibleEvents={visibleEvents}
+          selectedEvent={selectedEvent}
+          onNavigate={(y, s) => animateTo(y, s)}
+          onStartTour={handleStartTour}
+          onAddEvents={handleAddEvents}
+          initialMessage={chatInitMsg}
+        />
+      </Suspense>
 
       {tourStops && (
         <TourOverlay
