@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { ChatMessage, Viewport, TimelineEvent, TourStop } from '../types';
 import { formatYear, formatYearShort, scaleLabel } from '../utils/format';
+import { speak, stopSpeech, isSpeaking } from '../utils/speech';
+import VoiceButton from './VoiceButton';
 
 interface Props {
   viewport: Viewport;
@@ -38,6 +40,7 @@ export default function ChatPanel({
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -151,13 +154,23 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
         }
       }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: content.trim() }]);
+      const cleanContent = content.trim();
+      setMessages(prev => [...prev, { role: 'assistant', content: cleanContent }]);
+
+      // Auto-speak response in voice mode
+      if (voiceMode && cleanContent) {
+        // Truncate for TTS — speak first ~400 chars
+        const speakText = cleanContent.length > 400
+          ? cleanContent.slice(0, 400).replace(/\s\S*$/, '') + '...'
+          : cleanContent;
+        speak(speakText);
+      }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I had trouble connecting. Try again?" }]);
     } finally {
       setLoading(false);
     }
-  }, [messages, buildContext, onNavigate, onStartTour, onAddEvents]);
+  }, [messages, buildContext, onNavigate, onStartTour, onAddEvents, voiceMode]);
 
   if (!open) {
     return (
@@ -225,20 +238,41 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
             AI History Companion
           </div>
         </div>
-        <button
-          onClick={() => setOpen(false)}
-          style={{
-            marginLeft: 'auto',
-            background: 'none',
-            border: 'none',
-            color: '#ffffff60',
-            fontSize: 18,
-            cursor: 'pointer',
-            padding: 4,
-          }}
-        >
-          ✕
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Voice mode toggle */}
+          <button
+            onClick={() => {
+              const next = !voiceMode;
+              setVoiceMode(next);
+              if (!next) stopSpeech();
+            }}
+            style={{
+              background: voiceMode ? 'rgba(59,130,246,0.2)' : 'none',
+              border: `1px solid ${voiceMode ? 'rgba(59,130,246,0.4)' : 'transparent'}`,
+              borderRadius: 6,
+              color: voiceMode ? '#3b82f6' : '#ffffff40',
+              fontSize: 14,
+              cursor: 'pointer',
+              padding: '2px 6px',
+            }}
+            title={voiceMode ? 'Voice mode on — responses are spoken' : 'Voice mode off'}
+          >
+            {voiceMode ? '🔊' : '🔇'}
+          </button>
+          <button
+            onClick={() => setOpen(false)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#ffffff60',
+              fontSize: 18,
+              cursor: 'pointer',
+              padding: 4,
+            }}
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -320,7 +354,17 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
         borderTop: '1px solid rgba(255,255,255,0.06)',
         display: 'flex',
         gap: 8,
+        alignItems: 'flex-end',
       }}>
+        <VoiceButton
+          onFinalTranscript={(text) => {
+            if (!loading) {
+              setVoiceMode(true); // auto-enable voice mode when using mic
+              sendMessage(text);
+            }
+          }}
+          disabled={loading}
+        />
         <input
           type="text"
           value={input}

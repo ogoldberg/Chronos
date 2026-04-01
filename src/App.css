@@ -200,3 +200,9 @@ canvas {
     display: none;
   }
 }
+
+/* Voice pulse animation */
+@keyframes voicePulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.3); opacity: 0; }
+}
