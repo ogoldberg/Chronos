@@ -22,7 +22,7 @@ export function printTimeline(events: TimelineEvent[], viewport: Viewport, title
 <!DOCTYPE html>
 <html>
 <head>
-  <title>${title || 'CHRONOS Timeline'}</title>
+  <title>${escapeHtml(title || 'CHRONOS Timeline')}</title>
   <style>
     @page { margin: 1.5cm; }
     body {
@@ -61,7 +61,7 @@ export function printTimeline(events: TimelineEvent[], viewport: Viewport, title
   </style>
 </head>
 <body>
-  <h1>${title || 'CHRONOS Timeline'}</h1>
+  <h1>${escapeHtml(title || 'CHRONOS Timeline')}</h1>
   <div class="subtitle">
     ${formatYear(left)} → ${formatYear(right)} · ${sorted.length} events
   </div>

@@ -87,7 +87,7 @@ export const POPULATION_BY_REGION: RegionDataSeries[] = [
     { year: -3000, value: 2 }, { year: -2000, value: 5 }, { year: -1000, value: 10 },
     { year: -500, value: 18 }, { year: 1, value: 35 }, { year: 500, value: 25 },
     { year: 1000, value: 40 }, { year: 1340, value: 75 }, { year: 1600, value: 100 },
-    { year: 1800, value: 200 }, { year: 1900, value: 400 }, { year: 2025, value: 750 },
+    { year: 1800, value: 200 }, { year: 1900, value: 400 }, { year: 2025, value: 450 },
   ]},
   { regionId: 'eastasia', label: 'China', data: [
     { year: -3000, value: 3 }, { year: -2000, value: 8 }, { year: -1000, value: 20 },
