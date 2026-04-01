@@ -127,7 +127,7 @@ export function renderTimeline(
   // Tick marks
   const step = pickTickStep(vp.span);
   ctx.fillStyle = '#ffffff50';
-  ctx.font = `${11 / dpr * dpr}px "SF Mono", "Fira Code", monospace`;
+  ctx.font = `11px "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace`;
   ctx.textAlign = 'center';
   for (let y = Math.ceil(left / step) * step; y <= right; y += step) {
     const x = yearToPixel(y, vp, W);
@@ -324,7 +324,8 @@ export function renderTimeline(
     connGrad.addColorStop(1, ev.color + (isHovered ? '40' : '15'));
     ctx.strokeStyle = connGrad;
     ctx.lineWidth = isHovered ? 2 : 1;
-    ctx.setLineDash(isHovered ? [] : [2, 4]);
+    ctx.lineCap = 'round';
+    ctx.setLineDash(isHovered ? [] : [1, 6]);
     ctx.beginPath();
     ctx.moveTo(x, timelineY);
     ctx.lineTo(x, evY);
@@ -375,21 +376,21 @@ export function renderTimeline(
     ctx.textBaseline = 'middle';
     ctx.fillText(ev.emoji, x, evY + 1);
 
-    // Label with text shadow for readability
+    // Label with soft halo for readability
     ctx.font = `${isHovered ? '600 ' : '400 '}${isHovered ? 13 : 11}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
-    // Text shadow
-    ctx.fillStyle = '#00000080';
-    ctx.fillText(ev.title, x + 0.5, evY + markerSize / 2 + 5.5);
-    // Text
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 6;
     ctx.fillStyle = isHovered ? '#ffffff' : '#ffffffcc';
     ctx.fillText(ev.title, x, evY + markerSize / 2 + 5);
+    ctx.shadowBlur = 0;
 
     // Year sub-label
-    ctx.font = `9px "SF Mono", "Fira Code", monospace`;
+    ctx.font = `9px "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace`;
     ctx.fillStyle = ev.color + (isHovered ? 'cc' : '80');
     ctx.fillText(formatYearShort(ev.year), x, evY + markerSize / 2 + 21);
+    ctx.lineCap = 'butt';
   }
 
   // Render cluster bubbles for groups of 3+ events

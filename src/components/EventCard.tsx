@@ -346,7 +346,7 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
             padding: 14,
             marginBottom: 16,
           }}>
-            <div style={{ fontSize: 10, color: '#ffffff50', fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: '#ffffff45', fontWeight: 600, letterSpacing: 0.8, marginBottom: 8 }}>
               CONNECTIONS
             </div>
             {event.connections.map((conn, i) => (
@@ -383,7 +383,7 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
             padding: 14,
             marginBottom: 16,
           }}>
-            <div style={{ fontSize: 10, color: '#ffffff50', fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: '#ffffff45', fontWeight: 600, letterSpacing: 0.8, marginBottom: 8 }}>
               PRIMARY SOURCES
             </div>
             {sources.slice(0, 3).map((src, i) => (

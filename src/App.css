@@ -67,8 +67,8 @@ html, body, #root {
 }
 
 @keyframes discoverPulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,191,255,0.2); }
-  50% { opacity: 0.7; box-shadow: 0 0 12px 2px rgba(0,191,255,0.1); }
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,191,255,0.15); }
+  50% { opacity: 0.85; box-shadow: 0 0 12px 2px rgba(0,191,255,0.08); }
 }
 
 /* ─── Buttons ─── */
@@ -241,8 +241,8 @@ canvas {
 }
 
 @keyframes modalSlideIn {
-  from { opacity: 0; transform: translate(-50%, -48%); }
-  to { opacity: 1; transform: translate(-50%, -50%); }
+  from { opacity: 0; transform: translate(-50%, -44%) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 .keyboard-help h3 {
@@ -299,6 +299,48 @@ canvas {
 .keyboard-help-close:hover {
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.8);
+}
+
+/* ─── Shared Glass Panel ─── */
+.glass-panel {
+  background: rgba(10, 14, 22, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+
+.chip-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 4px 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.chip-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ─── Performance: compositor hints ─── */
+.discover-badge,
+.scroll-hint-arrow {
+  will-change: transform, opacity;
+}
+
+/* ─── Accessibility: respect motion preferences ─── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ─── Voice Pulse ─── */
