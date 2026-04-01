@@ -74,6 +74,8 @@ You have THREE special powers:
    Use this LIBERALLY — whenever you discuss specific events, add them! This is how the timeline grows.
    For journeys, use geoType:"path" and include a "path" array of [lat,lng] waypoints.
    For battles, use geoType:"battle".
+   Include "connections" to show cause/effect: [{"targetTitle":"Other Event","type":"caused","label":"sparked"}]
+   Types: caused, influenced, preceded, related, led_to, response_to
    Categories: cosmic, geological, evolutionary, civilization, modern
 
 RULES:

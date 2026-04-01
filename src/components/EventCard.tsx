@@ -228,6 +228,43 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
+        {/* Connections */}
+        {event.connections && event.connections.length > 0 && (
+          <div style={{
+            background: 'rgba(255,255,255,0.04)',
+            borderRadius: 10,
+            padding: 14,
+            marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 10, color: '#ffffff50', fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>
+              CONNECTIONS
+            </div>
+            {event.connections.map((conn, i) => (
+              <div key={i} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 0',
+                fontSize: 12,
+                color: '#ffffffcc',
+              }}>
+                <span style={{
+                  color: conn.type === 'caused' || conn.type === 'led_to' ? '#ff6b6b'
+                    : conn.type === 'influenced' ? '#ffd700' : '#87ceeb',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  minWidth: 60,
+                }}>
+                  {conn.label || conn.type}
+                </span>
+                <span>→</span>
+                <span>{conn.targetTitle || conn.targetId}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {wiki?.url && (

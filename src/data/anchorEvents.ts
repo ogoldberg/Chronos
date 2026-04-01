@@ -64,3 +64,37 @@ export const ANCHOR_EVENTS: TimelineEvent[] = ([
   { id:'a-ai', year:2022, title:"AI Revolution", emoji:"🤖", color:"#00bfff", desc:"LLMs go mainstream. Generative AI transforms everything.", maxSpan:0.02, category:'modern', wiki:"ChatGPT", lat:37.7749, lng:-122.4194, geoType:'point' },
   { id:'a-present', year:2025, title:"Present Day", emoji:"📍", color:"#ff1493", desc:"You are here. 13.8 billion years led to this moment.", maxSpan:0.01, category:'modern' },
 ] as RawEvent[]).map(e => ({ ...e, description: e.desc, source: 'anchor' as const }));
+
+// Add curated connections between anchor events
+const CONNECTIONS: Record<string, TimelineEvent['connections']> = {
+  'a-bigbang': [{ targetId: 'a-firststars', type: 'led_to', label: 'created matter for' }],
+  'a-firststars': [{ targetId: 'a-milkyway', type: 'led_to', label: 'formed into' }],
+  'a-solarsystem': [{ targetId: 'a-moon', type: 'led_to', label: 'collision formed' }],
+  'a-firstlife': [{ targetId: 'a-photosynthesis', type: 'led_to', label: 'evolved into' }],
+  'a-photosynthesis': [{ targetId: 'a-oxygenation', type: 'caused', label: 'produced oxygen' }],
+  'a-oxygenation': [{ targetId: 'a-eukaryotes', type: 'led_to', label: 'enabled' }],
+  'a-cambrian': [{ targetId: 'a-landplants', type: 'led_to', label: 'diversified into' }],
+  'a-greatdying': [{ targetId: 'a-dinosaurs', type: 'led_to', label: 'opened niche for' }],
+  'a-asteroid': [{ targetId: 'a-primates', type: 'led_to', label: 'opened niche for' }],
+  'a-agriculture': [{ targetId: 'a-writing', type: 'led_to', label: 'required record-keeping' }],
+  'a-writing': [{ targetId: 'a-alphabet', type: 'led_to', label: 'simplified into' }],
+  'a-gutenberg': [
+    { targetId: 'a-copernicus', type: 'influenced', label: 'spread ideas of' },
+    { targetId: 'a-newton', type: 'influenced', label: 'enabled dissemination of' },
+  ],
+  'a-newton': [{ targetId: 'a-independence', type: 'influenced', label: 'Enlightenment inspired' }],
+  'a-independence': [{ targetId: 'a-french', type: 'influenced', label: 'inspired' }],
+  'a-darwin': [{ targetId: 'a-dna', type: 'influenced', label: 'theory confirmed by' }],
+  'a-ww1': [{ targetId: 'a-ww2', type: 'led_to', label: 'unresolved tensions caused' }],
+  'a-ww2': [{ targetId: 'a-atomic', type: 'led_to', label: 'developed during' }],
+  'a-flight': [{ targetId: 'a-moonlanding', type: 'led_to', label: '66 years later' }],
+  'a-relativity': [{ targetId: 'a-atomic', type: 'influenced', label: 'E=mc² enabled' }],
+  'a-www': [{ targetId: 'a-iphone', type: 'led_to', label: 'mobile access to' }],
+  'a-iphone': [{ targetId: 'a-ai', type: 'led_to', label: 'platform for' }],
+};
+
+for (const event of ANCHOR_EVENTS) {
+  if (CONNECTIONS[event.id]) {
+    event.connections = CONNECTIONS[event.id];
+  }
+}

@@ -78,6 +78,20 @@ CREATE TABLE IF NOT EXISTS events (
   downvotes       INTEGER DEFAULT 0
 );
 
+-- Event connections / causality
+CREATE TABLE IF NOT EXISTS event_connections (
+  id              SERIAL PRIMARY KEY,
+  source_id       TEXT NOT NULL,           -- event that causes/influences
+  target_id       TEXT NOT NULL,           -- event that is caused/influenced
+  type            TEXT NOT NULL DEFAULT 'related',  -- caused, influenced, preceded, related, led_to, response_to
+  label           TEXT,                    -- human-readable: "sparked", "enabled", etc.
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conn_source ON event_connections (source_id);
+CREATE INDEX IF NOT EXISTS idx_conn_target ON event_connections (target_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conn_pair ON event_connections (source_id, target_id, type);
+
 -- Primary query: "give me events in year range at zoom level"
 CREATE INDEX IF NOT EXISTS idx_events_year ON events (year);
 CREATE INDEX IF NOT EXISTS idx_events_year_category ON events (year, category);
@@ -225,6 +239,45 @@ export async function searchEvents(query: string, limit = 50): Promise<DBEvent[]
            @@ plainto_tsquery('english', $1)
      ORDER BY rank DESC LIMIT $2`,
     [query, limit],
+  );
+  return result.rows;
+}
+
+export interface DBConnection {
+  source_id: string;
+  target_id: string;
+  type: string;
+  label?: string;
+}
+
+export async function upsertConnection(conn: DBConnection) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO event_connections (source_id, target_id, type, label)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (source_id, target_id, type) DO UPDATE SET
+       label = COALESCE(EXCLUDED.label, event_connections.label)`,
+    [conn.source_id, conn.target_id, conn.type, conn.label || null],
+  );
+}
+
+export async function getConnectionsForEvent(eventId: string): Promise<DBConnection[]> {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT * FROM event_connections WHERE source_id = $1 OR target_id = $1`,
+    [eventId],
+  );
+  return result.rows;
+}
+
+export async function getConnectionsInRange(startYear: number, endYear: number): Promise<DBConnection[]> {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT ec.* FROM event_connections ec
+     JOIN events e1 ON ec.source_id = e1.id
+     JOIN events e2 ON ec.target_id = e2.id
+     WHERE (e1.year BETWEEN $1 AND $2) OR (e2.year BETWEEN $1 AND $2)`,
+    [startYear, endYear],
   );
   return result.rows;
 }

@@ -37,6 +37,16 @@ export interface TimelineEvent {
   path?: [number, number][]; // [[lat,lng],...] for journeys/routes
   region?: [number, number][]; // [[lat,lng],...] polygon for territories
   geoType?: 'point' | 'path' | 'region' | 'battle' | 'storm';
+
+  // Connections to other events (causality, influence, etc.)
+  connections?: EventConnection[];
+}
+
+export interface EventConnection {
+  targetId: string;       // id of the connected event
+  targetTitle?: string;   // fallback if targetId not found (for AI-generated)
+  type: 'caused' | 'influenced' | 'preceded' | 'related' | 'led_to' | 'response_to';
+  label?: string;         // e.g. "sparked", "enabled", "resulted in"
 }
 
 export interface Viewport {

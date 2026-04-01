@@ -203,6 +203,65 @@ export function renderTimeline(
     ctx.fillText(formatYearShort(ev.year), x, evY + markerSize / 2 + 20);
   }
 
+  // Connection arcs between related events
+  const hitMap = new Map(hitTargets.map(ht => [ht.event.id, ht]));
+  const titleMap = new Map(hitTargets.map(ht => [ht.event.title, ht]));
+
+  for (const ht of hitTargets) {
+    const ev = ht.event;
+    if (!ev.connections) continue;
+    const isActiveEvent = ev.id === selectedId || ev.id === hoveredId;
+
+    for (const conn of ev.connections) {
+      // Find the target event by id or title
+      const target = hitMap.get(conn.targetId) || titleMap.get(conn.targetTitle || '');
+      if (!target) continue;
+
+      const opacity = isActiveEvent ? '60' : '20';
+      const lineWidth = isActiveEvent ? 2 : 1;
+
+      // Draw curved arc
+      ctx.strokeStyle = ev.color + opacity;
+      ctx.lineWidth = lineWidth;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+
+      const midX = (ht.x + target.x) / 2;
+      const midY = Math.min(ht.y, target.y) - 30; // arc above events
+      ctx.moveTo(ht.x, ht.y);
+      ctx.quadraticCurveTo(midX, midY, target.x, target.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Arrow head at target
+      if (isActiveEvent && (conn.type === 'caused' || conn.type === 'led_to')) {
+        const angle = Math.atan2(target.y - midY, target.x - midX);
+        ctx.fillStyle = ev.color + '80';
+        ctx.beginPath();
+        ctx.moveTo(target.x, target.y);
+        ctx.lineTo(
+          target.x - 8 * Math.cos(angle - 0.4),
+          target.y - 8 * Math.sin(angle - 0.4)
+        );
+        ctx.lineTo(
+          target.x - 8 * Math.cos(angle + 0.4),
+          target.y - 8 * Math.sin(angle + 0.4)
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Connection label
+      if (isActiveEvent && conn.label) {
+        ctx.font = '9px "SF Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#ffffff40';
+        ctx.fillText(conn.label, midX, midY - 4);
+      }
+    }
+  }
+
   // Current view label (top left)
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
