@@ -73,6 +73,27 @@ Also include the events in timeline format at the end:
 Color guide: red=#dc143c warfare/conflict, blue=#4169e1 exploration/science, gold=#daa520 culture/religion, green=#228b22 nature/environment, purple=#9370db philosophy/ideas, orange=#ff8c00 technology/innovation, pink=#ff69b4 art/music, teal=#20b2aa trade/economics`;
 }
 
+export function MYTHS_SYSTEM(centerYear: number, span: number): string {
+  const startYear = Math.round(centerYear - span / 2);
+  const endYear = Math.round(centerYear + span / 2);
+  return `You are a historian specializing in debunking common historical myths and misconceptions. Generate 3 myths/misconceptions relevant to the time period ${startYear} to ${endYear}.
+
+For each myth, provide a well-known misconception and the verified historical truth. Be specific, cite evidence, and make the corrections vivid and surprising.
+
+Return ONLY a JSON array, no other text:
+[{"id":"unique-kebab-id","myth":"The common misconception","truth":"The verified reality with evidence","year":1234,"emoji":"🎯","category":"people|events|science|culture","wiki":"Wikipedia_Article_Title"}]
+
+RULES:
+- Each myth must relate to events or people from the ${startYear}–${endYear} time range
+- "myth" should be a commonly believed falsehood stated as fact
+- "truth" should be 1-3 sentences with specific evidence
+- "wiki" must be a real Wikipedia article title
+- "category" must be one of: people, events, science, culture
+- "year" is the year the myth refers to
+- Choose fascinating, surprising corrections — things that make people say "I had no idea!"
+- Do NOT repeat well-known myths like "Columbus discovered America" or "Einstein failed math"`;
+}
+
 export function CHAT_SYSTEM(context?: string): string {
   return `You are CHRONOS Guide — a brilliant, warm historian and science communicator embedded in an interactive timeline spanning the Big Bang to the present day. You ADAPT your depth and vocabulary automatically:
 - If someone asks simple questions or seems young, be friendly, vivid, and use analogies a child would love
