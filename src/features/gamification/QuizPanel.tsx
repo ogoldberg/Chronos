@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { recordQuizAnswer, getStats } from './gamification';
+import { addReviewCard } from './spacedRepetition';
 
 interface QuizQuestion {
   question: string;
@@ -103,12 +104,21 @@ export default function QuizPanel({ recentEvents = [], era = 'modern', onClose }
     const stats = recordQuizAnswer(correct);
     setStreak(stats.quizStreak);
 
-    if (correct) {
+    if (correct && question) {
       const earned = stats.xp - prevStats.xp;
       setXpEarned(earned);
       setSessionXP((s) => s + earned);
       setFireAnim(true);
       setTimeout(() => setFireAnim(false), 600);
+
+      // Add to spaced repetition deck
+      addReviewCard({
+        id: `quiz-${Date.now()}`,
+        eventTitle: question.question.slice(0, 60),
+        eventYear: new Date().getFullYear(),
+        question: question.question,
+        answer: `${question.options[question.correctIndex]}. ${question.explanation}`,
+      });
     }
   };
 

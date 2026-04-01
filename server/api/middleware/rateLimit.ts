@@ -18,6 +18,8 @@ const ENDPOINT_LIMITS: Record<string, number> = {
   'debate': 10,
   'lens': 20,
   'search': 60,
+  'today': 10,
+  'figures': 15,
 };
 
 /**

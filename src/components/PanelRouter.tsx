@@ -25,6 +25,15 @@ const DataOverlays = lazy(() => import('../features/overlays/DataOverlays'));
 const TeacherDashboard = lazy(() => import('../features/classroom/TeacherDashboard'));
 const StudentView = lazy(() => import('../features/classroom/StudentView'));
 const CollaborationPanel = lazy(() => import('../features/collaboration/CollaborationPanel'));
+const TodayInHistory = lazy(() => import('../features/today/TodayInHistory'));
+const ConnectionGraph = lazy(() => import('../features/graph/ConnectionGraph'));
+const ReviewPanel = lazy(() => import('../features/gamification/ReviewPanel'));
+const FigureChat = lazy(() => import('../features/figures/FigureChat'));
+const ReadingList = lazy(() => import('../features/reading/ReadingList'));
+const SourceComparison = lazy(() => import('../features/sources/SourceComparison'));
+const DifficultySelector = lazy(() => import('../features/settings/DifficultySelector'));
+const HistoryOfPlace = lazy(() => import('../features/places/HistoryOfPlace'));
+const HistorySoundtrack = lazy(() => import('../features/soundtrack/HistorySoundtrack'));
 
 export default function PanelRouter() {
   const activePanel = useUIStore(s => s.activePanel);
@@ -174,6 +183,40 @@ export default function PanelRouter() {
       )}
       {activePanel === 'collaboration' && (
         <CollaborationPanel />
+      )}
+      {activePanel === 'today' && (
+        <TodayInHistory
+          onNavigate={animateTo}
+          onClose={closePanel}
+        />
+      )}
+      {activePanel === 'graph' && (
+        <ConnectionGraph
+          onNavigate={animateTo}
+          onClose={closePanel}
+          events={allEvents}
+        />
+      )}
+      {activePanel === 'review' && (
+        <ReviewPanel onClose={closePanel} />
+      )}
+      {activePanel === 'figures' && (
+        <FigureChat onNavigate={animateTo} onClose={closePanel} />
+      )}
+      {activePanel === 'reading' && (
+        <ReadingList onClose={closePanel} viewport={viewport} />
+      )}
+      {activePanel === 'sources' && (
+        <SourceComparison onNavigate={animateTo} onClose={closePanel} />
+      )}
+      {activePanel === 'difficulty' && (
+        <DifficultySelector onClose={closePanel} />
+      )}
+      {activePanel === 'places' && (
+        <HistoryOfPlace onNavigate={animateTo} onClose={closePanel} />
+      )}
+      {activePanel === 'soundtrack' && (
+        <HistorySoundtrack currentYear={viewport.centerYear} onClose={closePanel} />
       )}
       {activePanel === 'help' && (
         <KeyboardHelpInline onClose={closePanel} />

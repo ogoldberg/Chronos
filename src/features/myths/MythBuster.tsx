@@ -64,7 +64,17 @@ export default function MythBuster({ onNavigate, onAskAI, onClose, centerYear, s
     setRevealed(true);
     // Award XP for revealing a myth
     import('../gamification/gamification').then(g => g.recordMythRevealed());
-  }, []);
+    // Add to spaced repetition deck
+    if (currentMyth) {
+      import('../gamification/spacedRepetition').then(sr => sr.addReviewCard({
+        id: `myth-${currentMyth.id}`,
+        eventTitle: currentMyth.myth.slice(0, 60),
+        eventYear: currentMyth.year,
+        question: `Myth or Reality? "${currentMyth.myth}"`,
+        answer: currentMyth.truth,
+      }));
+    }
+  }, [currentMyth]);
 
   const handleCategoryChange = useCallback((cat: string) => {
     setCategory(cat);

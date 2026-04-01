@@ -292,6 +292,15 @@ export default function App() {
         {toolBtn('🤝 Collab', 'collaboration')}
         {toolBtn('📊 Data', 'overlays')}
         {toolBtn('📤 Export', 'export')}
+        {toolBtn('📅 Today', 'today')}
+        {toolBtn('🕸️ Graph', 'graph')}
+        {toolBtn('🧠 Review', 'review')}
+        {toolBtn('👤 Figures', 'figures')}
+        {toolBtn('📚 Reading', 'reading')}
+        {toolBtn('📜 Sources', 'sources')}
+        {toolBtn('📍 Places', 'places')}
+        {toolBtn('🎵 Sound', 'soundtrack')}
+        {toolBtn('⚙️ Difficulty', 'difficulty')}
         {toolBtn('👤 Account', 'auth')}
       </div>
 

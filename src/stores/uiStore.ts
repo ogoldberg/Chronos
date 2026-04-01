@@ -8,7 +8,12 @@ export type PanelId =
   | 'teacher' | 'student'
   | 'community' | 'overlays'
   | 'collaboration'
+  | 'today' | 'graph'
+  | 'review' | 'figures' | 'reading' | 'sources' | 'difficulty'
+  | 'places' | 'soundtrack'
   | null;
+
+export type DifficultyLevel = 'kids' | 'standard' | 'advanced' | 'research';
 
 interface UIState {
   // Panel management — only one panel open at a time (except globe)
@@ -37,6 +42,10 @@ interface UIState {
   // Chat initial message (cross-panel trigger)
   chatInitMsg: string | undefined;
   setChatInitMsg: (msg: string | undefined) => void;
+
+  // Difficulty level
+  difficulty: DifficultyLevel;
+  setDifficulty: (level: DifficultyLevel) => void;
 }
 
 const ALL_LANES = new Set(['europe', 'mideast', 'eastasia', 'southasia', 'africa', 'americas']);
@@ -67,4 +76,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   chatInitMsg: undefined,
   setChatInitMsg: (msg) => set({ chatInitMsg: msg }),
+
+  difficulty: (typeof localStorage !== 'undefined' ? localStorage.getItem('chronos_difficulty') as DifficultyLevel : null) || 'standard',
+  setDifficulty: (level) => set({ difficulty: level }),
 }));

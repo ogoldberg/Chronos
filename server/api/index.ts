@@ -26,6 +26,12 @@ import { registerCommunityRoutes } from './routes/community';
 import { registerCurriculumRoutes } from './routes/curriculum';
 import { registerComparisonRoutes } from './routes/comparison';
 import { registerModerationRoutes } from './routes/moderation';
+import { registerTodayRoutes } from './routes/today';
+import { registerNearbyRoutes } from './routes/nearby';
+import { registerPublicApiRoutes } from './routes/publicApi';
+import { registerFiguresRoutes } from './routes/figures';
+import { registerReadingRoutes } from './routes/reading';
+import { registerSourcesRoutes } from './routes/sources';
 
 export { handleStreamRequest };
 
@@ -86,6 +92,12 @@ registerCommunityRoutes(handleRoute);
 registerCurriculumRoutes(handleRoute, isDbReady);
 registerComparisonRoutes(handleRoute);
 registerModerationRoutes(handleRoute, isDbReady);
+registerTodayRoutes(handleRoute);
+registerNearbyRoutes(handleRoute);
+registerPublicApiRoutes(handleRoute, isDbReady);
+registerFiguresRoutes(handleRoute);
+registerReadingRoutes(handleRoute);
+registerSourcesRoutes(handleRoute);
 
 // ── Request dispatcher ───────────────────────────────────────────────
 
