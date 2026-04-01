@@ -2,21 +2,28 @@
  * POST /api/myths — historical myths and misconceptions
  */
 
+import { z } from 'zod';
 import { getProvider } from '../../providers/index';
 import { MYTHS_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
+import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
+
+const mythsSchema = z.object({
+  centerYear: z.number(),
+  span: z.number(),
+});
 
 export function registerMythsRoutes(handleRoute: RouteHandler) {
   handleRoute('POST', '/api/myths', null, async (body, _url, reqHeaders) => {
     if (!checkRateLimit('myths', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
+    const parsed = validate(mythsSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+    const { centerYear, span } = parsed.data;
+
     const ai = getProvider();
-    const { centerYear, span } = body;
-    if (typeof centerYear !== 'number' || typeof span !== 'number') {
-      return { status: 400, data: { error: 'centerYear and span are required numbers.' } };
-    }
 
     const system = MYTHS_SYSTEM(centerYear, span);
     const resp = await ai.chat(system, [

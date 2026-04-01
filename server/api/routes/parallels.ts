@@ -2,21 +2,28 @@
  * POST /api/parallels — find historical parallels
  */
 
+import { z } from 'zod';
 import { getProvider } from '../../providers/index';
 import { PARALLELS_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
+import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
+
+const parallelsSchema = z.object({
+  query: z.string().min(1, 'A query string is required.'),
+  context: z.string().optional(),
+});
 
 export function registerParallelsRoutes(handleRoute: RouteHandler) {
   handleRoute('POST', '/api/parallels', null, async (body, _url, reqHeaders) => {
     if (!checkRateLimit('parallels', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
+    const parsed = validate(parallelsSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+    const { query, context } = parsed.data;
+
     const ai = getProvider();
-    const { query, context } = body;
-    if (!query || typeof query !== 'string' || !query.trim()) {
-      return { status: 400, data: { error: 'A query string is required.' } };
-    }
 
     const system = PARALLELS_SYSTEM(query.trim(), context);
     const resp = await ai.chat(system, [

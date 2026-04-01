@@ -4,11 +4,25 @@
  * POST /api/seed — seed anchor events into DB
  */
 
+import { z } from 'zod';
 import { getUserProgress, saveUserProgress, upsertEvent } from '../../db';
 import { getAuth } from '../../auth';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
+import { validate } from '../middleware/validate';
 import { ANCHOR_EVENTS } from '../../../src/data/anchorEvents.ts';
 import type { RouteHandler } from '../index';
+
+const progressSchema = z.object({
+  xp: z.number().optional(),
+  level: z.number().optional(),
+  completedUnits: z.array(z.string()).optional(),
+  quizScores: z.record(z.number()).optional(),
+  badges: z.array(z.string()).optional(),
+}).passthrough();
+
+const seedSchema = z.object({
+  adminKey: z.string(),
+});
 
 export function registerUserRoutes(handleRoute: RouteHandler, dbReady: () => boolean) {
   handleRoute('GET', '/api/user/progress', null, async (_body, _url, reqHeaders) => {
@@ -41,7 +55,9 @@ export function registerUserRoutes(handleRoute: RouteHandler, dbReady: () => boo
     if (!session?.user?.id) {
       return { status: 401, data: { error: 'Not authenticated' } };
     }
-    await saveUserProgress(session.user.id, body);
+    const parsed = validate(progressSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+    await saveUserProgress(session.user.id, parsed.data);
     return { status: 200, data: { ok: true } };
   });
 
@@ -49,11 +65,14 @@ export function registerUserRoutes(handleRoute: RouteHandler, dbReady: () => boo
     if (!checkRateLimit('seed', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
+    const parsedSeed = validate(seedSchema, body);
+    if (!parsedSeed.success) return { status: 400, data: { error: parsedSeed.error } };
+
     const adminKey = process.env.ADMIN_KEY;
     if (!adminKey) {
       return { status: 403, data: { error: 'ADMIN_KEY not configured — seed endpoint disabled' } };
     }
-    if (body.adminKey !== adminKey) {
+    if (parsedSeed.data.adminKey !== adminKey) {
       return { status: 403, data: { error: 'Invalid admin key' } };
     }
     if (!dbReady()) {

@@ -14,12 +14,56 @@
  * POST   /api/classroom/progress  — save student progress
  */
 
+import { z } from 'zod';
 import { getPool } from '../../db';
 import { getAuth } from '../../auth';
 import { getProvider } from '../../providers/index';
 import { CURRICULUM_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
+import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
+
+const curriculumCreateSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional().default('Untitled'),
+  subject: z.string().optional().default(''),
+  gradeLevel: z.string().optional().default(''),
+  description: z.string().optional().default(''),
+  units: z.array(z.any()).optional().default([]),
+  isPublic: z.boolean().optional().default(false),
+});
+
+const curriculumUpdateSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional().default('Untitled'),
+  subject: z.string().optional().default(''),
+  gradeLevel: z.string().optional().default(''),
+  description: z.string().optional().default(''),
+  units: z.array(z.any()).optional().default([]),
+  isPublic: z.boolean().optional().default(false),
+});
+
+const curriculumGenerateSchema = z.object({
+  topic: z.string().min(1, 'topic is required'),
+});
+
+const classroomCreateSchema = z.object({
+  name: z.string().optional().default('My Classroom'),
+});
+
+const classroomJoinSchema = z.object({
+  code: z.string().length(6, 'Invalid join code'),
+});
+
+const classroomAssignSchema = z.object({
+  classroomId: z.string().min(1, 'Missing classroomId'),
+  curriculumId: z.string().min(1, 'Missing curriculumId'),
+});
+
+const classroomProgressSchema = z.object({
+  classroomId: z.string().min(1, 'Missing classroomId'),
+  progress: z.any().optional().default({}),
+});
 
 function generateJoinCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I confusion
@@ -43,13 +87,16 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
     const user = await getSessionUser(reqHeaders);
     if (!user) return { status: 401, data: { error: 'Authentication required' } };
 
+    const parsed = validate(curriculumCreateSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+
     const db = getPool();
-    const id = body.id || (Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
+    const id = parsed.data.id || (Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
     await db.query(
       `INSERT INTO curricula (id, teacher_id, title, subject, grade_level, description, units, is_public)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, user.id, body.title || 'Untitled', body.subject || '', body.gradeLevel || '',
-       body.description || '', JSON.stringify(body.units || []), body.isPublic || false],
+      [id, user.id, parsed.data.title, parsed.data.subject, parsed.data.gradeLevel,
+       parsed.data.description, JSON.stringify(parsed.data.units), parsed.data.isPublic],
     );
     return { status: 200, data: { id, ok: true } };
   });
@@ -102,8 +149,11 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
     const user = await getSessionUser(reqHeaders);
     if (!user) return { status: 401, data: { error: 'Authentication required' } };
 
+    const parsedBody = validate(curriculumUpdateSchema, body);
+    if (!parsedBody.success) return { status: 400, data: { error: parsedBody.error } };
+
     const params = new URL(url, 'http://localhost').searchParams;
-    const id = params.get('id') || body.id;
+    const id = params.get('id') || parsedBody.data.id;
     if (!id) return { status: 400, data: { error: 'Missing curriculum id' } };
 
     const db = getPool();
@@ -114,8 +164,8 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
     await db.query(
       `UPDATE curricula SET title=$1, subject=$2, grade_level=$3, description=$4, units=$5, is_public=$6, updated_at=NOW()
        WHERE id=$7`,
-      [body.title || 'Untitled', body.subject || '', body.gradeLevel || '',
-       body.description || '', JSON.stringify(body.units || []), body.isPublic || false, id],
+      [parsedBody.data.title, parsedBody.data.subject, parsedBody.data.gradeLevel,
+       parsedBody.data.description, JSON.stringify(parsedBody.data.units), parsedBody.data.isPublic, id],
     );
     return { status: 200, data: { ok: true } };
   });
@@ -140,10 +190,9 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
     if (!checkRateLimit('curriculum-generate', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
-    const { topic } = body;
-    if (!topic || typeof topic !== 'string') {
-      return { status: 400, data: { error: 'topic is required' } };
-    }
+    const parsedGen = validate(curriculumGenerateSchema, body);
+    if (!parsedGen.success) return { status: 400, data: { error: parsedGen.error } };
+    const { topic } = parsedGen.data;
 
     // Extract grade level hint from topic
     const gradeLevelMatch = topic.match(/(\d+)(?:th|st|nd|rd)\s*grade/i);
@@ -171,13 +220,16 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
     const user = await getSessionUser(reqHeaders);
     if (!user) return { status: 401, data: { error: 'Authentication required' } };
 
+    const parsedCr = validate(classroomCreateSchema, body);
+    if (!parsedCr.success) return { status: 400, data: { error: parsedCr.error } };
+
     const db = getPool();
     const id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
     const joinCode = generateJoinCode();
 
     await db.query(
       'INSERT INTO classrooms (id, teacher_id, name, join_code) VALUES ($1, $2, $3, $4)',
-      [id, user.id, body.name || 'My Classroom', joinCode],
+      [id, user.id, parsedCr.data.name, joinCode],
     );
     return { status: 200, data: { id, joinCode, ok: true } };
   });
@@ -207,10 +259,9 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
   // ── POST /api/classroom/join — student joins with code ──
   handleRoute('POST', '/api/classroom/join', null, async (body, _url, reqHeaders) => {
     if (!dbReady()) return { status: 503, data: { error: 'Database not available' } };
-    const { code } = body;
-    if (!code || typeof code !== 'string' || code.length !== 6) {
-      return { status: 400, data: { error: 'Invalid join code' } };
-    }
+    const parsedJoin = validate(classroomJoinSchema, body);
+    if (!parsedJoin.success) return { status: 400, data: { error: parsedJoin.error } };
+    const { code } = parsedJoin.data;
 
     const db = getPool();
     const cr = await db.query('SELECT * FROM classrooms WHERE join_code = $1', [code.toUpperCase()]);
@@ -265,8 +316,9 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
     const user = await getSessionUser(reqHeaders);
     if (!user) return { status: 401, data: { error: 'Authentication required' } };
 
-    const { classroomId, curriculumId } = body;
-    if (!classroomId || !curriculumId) return { status: 400, data: { error: 'Missing classroomId or curriculumId' } };
+    const parsedAssign = validate(classroomAssignSchema, body);
+    if (!parsedAssign.success) return { status: 400, data: { error: parsedAssign.error } };
+    const { classroomId, curriculumId } = parsedAssign.data;
 
     const db = getPool();
     await db.query(
@@ -306,8 +358,9 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
   // ── POST /api/classroom/progress — save student progress ──
   handleRoute('POST', '/api/classroom/progress', null, async (body, _url, reqHeaders) => {
     if (!dbReady()) return { status: 503, data: { error: 'Database not available' } };
-    const { classroomId, progress } = body;
-    if (!classroomId) return { status: 400, data: { error: 'Missing classroomId' } };
+    const parsedProg = validate(classroomProgressSchema, body);
+    if (!parsedProg.success) return { status: 400, data: { error: parsedProg.error } };
+    const { classroomId, progress } = parsedProg.data;
 
     const user = await getSessionUser(reqHeaders);
     const userId = user?.id || `anon-${getClientIP(reqHeaders || {})}`;

@@ -26,20 +26,23 @@ export function registerConfigRoutes(handleRoute: RouteHandler) {
   });
 
   handleRoute('POST', '/api/config', null, async (body) => {
+    const parsed = validate(configSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+
     const adminKey = process.env.ADMIN_KEY;
     if (!adminKey) {
       return { status: 403, data: { error: 'ADMIN_KEY not configured — config endpoint disabled' } };
     }
-    if (body.adminKey !== adminKey) {
+    if (parsed.data.adminKey !== adminKey) {
       return { status: 403, data: { error: 'Invalid admin key' } };
     }
     const newConfig: AIProviderConfig = {
-      provider: body.provider || 'anthropic',
-      model: body.model,
-      apiKey: body.apiKey,
-      baseUrl: body.baseUrl,
-      maxTokens: body.maxTokens,
-      webSearch: body.webSearch,
+      provider: parsed.data.provider || 'anthropic',
+      model: parsed.data.model,
+      apiKey: parsed.data.apiKey,
+      baseUrl: parsed.data.baseUrl,
+      maxTokens: parsed.data.maxTokens,
+      webSearch: parsed.data.webSearch,
     };
     setProvider(newConfig);
     return { status: 200, data: { ok: true, provider: newConfig.provider, model: newConfig.model } };

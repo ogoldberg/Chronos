@@ -2,24 +2,36 @@
  * POST /api/lens/discover — discover events through a thematic lens
  */
 
+import { z } from 'zod';
 import { getProvider } from '../../providers/index';
 import { upsertEvents } from '../../db';
 import { LENS_DISCOVERY_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
+import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
+
+const lensDiscoverSchema = z.object({
+  lens: z.object({
+    name: z.string().min(1),
+    description: z.string().optional().default(''),
+    tags: z.array(z.string()).min(1),
+  }),
+  startYear: z.number(),
+  endYear: z.number(),
+  count: z.number().min(1).max(20).optional().default(8),
+});
 
 export function registerLensRoutes(handleRoute: RouteHandler, dbReady: () => boolean) {
   handleRoute('POST', '/api/lens/discover', null, async (body, _url, reqHeaders) => {
     if (!checkRateLimit('lens-discover', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
-    const ai = getProvider();
-    const { lens, startYear, endYear, count = 8 } = body;
-    if (!lens?.name || !lens?.tags || typeof startYear !== 'number' || typeof endYear !== 'number') {
-      return { status: 400, data: { error: 'lens (with name, description, tags), startYear, and endYear are required.' } };
-    }
+    const parsed = validate(lensDiscoverSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+    const { lens, startYear, endYear, count } = parsed.data;
 
-    const safeCount = Math.min(Math.max(count, 1), 20);
+    const ai = getProvider();
+    const safeCount = count;
     const system = LENS_DISCOVERY_SYSTEM(lens, startYear, endYear, safeCount);
     const resp = await ai.chat(system, [
       { role: 'user', content: `Discover ${safeCount} events between ${startYear} and ${endYear} through the "${lens.name}" lens. Focus on: ${lens.tags.slice(0, 15).join(', ')}.` },
