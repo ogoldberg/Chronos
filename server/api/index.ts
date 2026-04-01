@@ -22,6 +22,8 @@ import { registerWhatifRoutes } from './routes/whatif';
 import { registerDebateRoutes } from './routes/debate';
 import { registerUserRoutes } from './routes/user';
 import { registerConfigRoutes } from './routes/config';
+import { registerCommunityRoutes } from './routes/community';
+import { registerCurriculumRoutes } from './routes/curriculum';
 
 export { handleStreamRequest };
 
@@ -78,6 +80,8 @@ registerWhatifRoutes(handleRoute);
 registerDebateRoutes(handleRoute);
 registerUserRoutes(handleRoute, isDbReady);
 registerConfigRoutes(handleRoute);
+registerCommunityRoutes(handleRoute);
+registerCurriculumRoutes(handleRoute, isDbReady);
 
 // ── Request dispatcher ───────────────────────────────────────────────
 

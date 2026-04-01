@@ -229,6 +229,44 @@ CREATE INDEX IF NOT EXISTS idx_user_annotations_user ON user_annotations (user_i
 CREATE INDEX IF NOT EXISTS idx_user_lenses_user ON user_lenses (user_id);
 CREATE INDEX IF NOT EXISTS idx_user_tours_user ON user_tours (user_id);
 CREATE INDEX IF NOT EXISTS idx_discovery_log_time ON discovery_log (created_at);
+
+-- ═══ Curriculum & Classrooms ═══
+
+CREATE TABLE IF NOT EXISTS curricula (
+  id              TEXT PRIMARY KEY,
+  teacher_id      TEXT NOT NULL,
+  title           TEXT NOT NULL,
+  subject         TEXT,
+  grade_level     TEXT,
+  description     TEXT,
+  units           JSONB DEFAULT '[]',
+  is_public       BOOLEAN DEFAULT FALSE,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS classrooms (
+  id              TEXT PRIMARY KEY,
+  teacher_id      TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  join_code       TEXT UNIQUE NOT NULL,
+  curriculum_id   TEXT REFERENCES curricula(id),
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS classroom_students (
+  id              SERIAL PRIMARY KEY,
+  classroom_id    TEXT NOT NULL,
+  user_id         TEXT NOT NULL,
+  progress        JSONB DEFAULT '{}',
+  joined_at       TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (classroom_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_curricula_teacher ON curricula (teacher_id);
+CREATE INDEX IF NOT EXISTS idx_classrooms_teacher ON classrooms (teacher_id);
+CREATE INDEX IF NOT EXISTS idx_classrooms_code ON classrooms (join_code);
+CREATE INDEX IF NOT EXISTS idx_classroom_students_classroom ON classroom_students (classroom_id);
 `;
 
 // ─── Queries ───

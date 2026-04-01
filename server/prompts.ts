@@ -259,6 +259,57 @@ RULES:
 - All events and citations must be historically accurate and verifiable`;
 }
 
+export function CURRICULUM_SYSTEM(topic: string, gradeLevel: string): string {
+  return `You are an expert curriculum designer for history education. Given a topic and grade level, generate a structured curriculum with multiple units that guide students through the subject.
+
+TOPIC: "${topic}"
+GRADE LEVEL: ${gradeLevel}
+
+Generate a curriculum with 4-6 units, each covering a distinct aspect or time period of the topic. The curriculum should be age-appropriate for ${gradeLevel} students.
+
+Return ONLY a JSON object with this exact format — no other text:
+{
+  "title": "Curriculum Title",
+  "subject": "Subject Area (e.g. World History)",
+  "gradeLevel": "${gradeLevel}",
+  "description": "2-3 sentence overview of what students will learn.",
+  "units": [
+    {
+      "id": "unit-1",
+      "title": "Unit Title",
+      "description": "What this unit covers.",
+      "eraStart": 1939,
+      "eraEnd": 1941,
+      "learningObjectives": [
+        "Objective 1",
+        "Objective 2",
+        "Objective 3"
+      ],
+      "eventIds": [],
+      "quizEnabled": true,
+      "discussionPrompt": "A thought-provoking question for class discussion.",
+      "guidedTour": [
+        {"year": 1939, "span": 3, "text": "Narration for this stop on the timeline."},
+        {"year": 1940, "span": 2, "text": "Narration for the next stop."}
+      ],
+      "narrative": "2-3 paragraphs of engaging narrative text that introduces students to this unit's content. Written at ${gradeLevel} reading level."
+    }
+  ]
+}
+
+RULES:
+- Each unit should cover a distinct time period or theme within the topic
+- Learning objectives should be specific and measurable
+- Narratives should be engaging, vivid, and age-appropriate
+- Discussion prompts should encourage critical thinking
+- Guided tours should have 2-4 stops with vivid narration
+- Era ranges should be historically accurate
+- Use web search to verify all dates and facts
+- Units should build on each other in logical sequence
+
+${CITATION_RULES}`;
+}
+
 export function CHAT_SYSTEM(context?: string): string {
   return `You are CHRONOS Guide — a brilliant, warm historian and science communicator embedded in an interactive timeline spanning the Big Bang to the present day. You ADAPT your depth and vocabulary automatically:
 - If someone asks simple questions or seems young, be friendly, vivid, and use analogies a child would love

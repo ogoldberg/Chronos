@@ -20,6 +20,8 @@ const PersonalTimeline = lazy(() => import('./PersonalTimeline'));
 const ExportPanel = lazy(() => import('./ExportPanel'));
 const TimeLapse = lazy(() => import('./TimeLapse'));
 const DebatePanel = lazy(() => import('./DebatePanel'));
+const CommunityHub = lazy(() => import('./CommunityHub'));
+const DataOverlays = lazy(() => import('./DataOverlays'));
 
 export default function PanelRouter() {
   const activePanel = useUIStore(s => s.activePanel);
@@ -152,6 +154,14 @@ export default function PanelRouter() {
           onNavigate={animateTo}
           onClose={closePanel}
         />
+      )}
+      {activePanel === 'community' && (
+        <CommunityHub
+          onClose={closePanel}
+        />
+      )}
+      {activePanel === 'overlays' && (
+        <DataOverlays />
       )}
       {activePanel === 'help' && (
         <KeyboardHelpInline onClose={closePanel} />

@@ -5,6 +5,7 @@ import { fetchWikiSummary } from '../services/wikipediaApi';
 import { searchWikisource, type SourceDocument } from '../services/wikisourceApi';
 import { factCheckEvent, type FactCheckResult } from '../services/factCheck';
 import { verifyCitations } from '../services/citationVerifier';
+import { EventVoting } from './CommunityHub';
 
 interface Props {
   event: TimelineEvent;
@@ -453,6 +454,13 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
                 )}
               </a>
             ))}
+          </div>
+        )}
+
+        {/* Event Voting */}
+        {event.source === 'discovered' && (
+          <div style={{ marginBottom: 12 }}>
+            <EventVoting eventId={event.id} />
           </div>
         )}
 

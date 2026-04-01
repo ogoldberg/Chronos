@@ -5,6 +5,8 @@ export type PanelId =
   | 'currentEvents' | 'myths' | 'quiz' | 'lenses'
   | 'auth' | 'search' | 'whatif' | 'personal' | 'help'
   | 'export' | 'timelapse' | 'debate'
+  | 'teacher' | 'student'
+  | 'community' | 'overlays'
   | null;
 
 interface UIState {
