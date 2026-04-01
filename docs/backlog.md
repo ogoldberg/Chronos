@@ -184,3 +184,16 @@ Cross-reference discovered events before showing them.
 ### [x] Sub-year time precision
 ### [x] Multimedia fields (image, video, audio)
 ### [x] Geographic coordinates on events
+### [x] Full two-way voice conversation (STT + TTS)
+### [x] Streaming AI responses (SSE, all 4 providers)
+### [x] Event connections and causality (arcs + arrows)
+### [x] Parallel civilization lanes ("What else was happening?")
+### [x] Shareable deep links (URL state)
+### [x] Code splitting (main bundle 760KB → 242KB)
+### [x] Event clustering (grid-based, 3+ threshold)
+### [x] Keyboard navigation + help overlay
+### [x] PWA / offline support (service worker + manifest)
+### [x] Primary source documents (Wikisource API)
+### [x] Rate limiting on AI endpoints
+### [x] Security: admin key for config, JSON parse safety, lat/lng coercion fix
+### [x] Production Dockerfile with health check + pruned deps
