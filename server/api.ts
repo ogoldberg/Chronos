@@ -4,7 +4,7 @@ import type { AIProviderConfig } from './providers/index';
 import { initDB, upsertEvents, getEventsInRange } from './db';
 import { initAuth, getAuth } from './auth';
 import { toNodeHandler } from 'better-auth/node';
-import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM, PARALLELS_SYSTEM, MYTHS_SYSTEM, QUIZ_SYSTEM } from './prompts';
+import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM, PARALLELS_SYSTEM, MYTHS_SYSTEM, QUIZ_SYSTEM, LENS_DISCOVERY_SYSTEM } from './prompts';
 
 let dbReady = false;
 
@@ -265,6 +265,44 @@ export async function handleApiRequest(
       } catch { /* fall through */ }
     }
     return { status: 500, data: { error: 'Failed to generate quiz question. Try again.' } };
+  }
+
+  // POST /api/lens/discover
+  if (method === 'POST' && url === '/api/lens/discover') {
+    if (!checkRateLimit('lens-discover')) {
+      return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
+    }
+    const { lens, startYear, endYear, count = 8 } = body;
+    if (!lens?.name || !lens?.tags || typeof startYear !== 'number' || typeof endYear !== 'number') {
+      return { status: 400, data: { error: 'lens (with name, description, tags), startYear, and endYear are required.' } };
+    }
+
+    const safeCount = Math.min(Math.max(count, 1), 20);
+    const system = LENS_DISCOVERY_SYSTEM(lens, startYear, endYear, safeCount);
+    const resp = await ai.chat(system, [
+      { role: 'user', content: `Discover ${safeCount} events between ${startYear} and ${endYear} through the "${lens.name}" lens. Focus on: ${lens.tags.slice(0, 15).join(', ')}.` },
+    ], { maxTokens: 3000, webSearch: true });
+
+    const jsonMatch = resp.text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      let events: any[];
+      try { events = JSON.parse(jsonMatch[0]); }
+      catch { return { status: 200, data: { events: [] } }; }
+
+      // Persist to DB
+      if (dbReady) {
+        upsertEvents(events.map((e: any, i: number) => ({
+          id: `lens-${lens.name.replace(/\s+/g, '-').toLowerCase()}-${startYear}-${i}`,
+          title: e.title, year: e.year, timestamp: e.timestamp || null,
+          precision: e.precision || 'year', emoji: e.emoji, color: e.color,
+          description: e.description, category: e.category, source: 'discovered',
+          zoom_tier: '', wiki: e.wiki, lat: e.lat, lng: e.lng,
+          geo_type: e.geoType, path: e.path, region: e.region,
+        }))).catch(err => console.error('[DB] Lens persist error:', err.message));
+      }
+      return { status: 200, data: { events } };
+    }
+    return { status: 200, data: { events: [] } };
   }
 
   // POST /api/chat
