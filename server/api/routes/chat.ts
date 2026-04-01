@@ -23,17 +23,11 @@ export function registerChatRoutes(handleRoute: RouteHandler) {
     if (!checkRateLimit('chat', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded' } };
     }
+    const parsed = validate(chatSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+    const { messages, context } = parsed.data;
+
     const ai = getProvider();
-    const { messages, context } = body;
-    // Validate messages
-    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 20) {
-      return { status: 400, data: { error: 'messages must be an array of 1-20 items' } };
-    }
-    for (const msg of messages) {
-      if (typeof msg.content !== 'string' || msg.content.length > 8000) {
-        return { status: 400, data: { error: 'Each message content must be a string under 8000 chars' } };
-      }
-    }
     const system = CHAT_SYSTEM(context);
     const resp = await ai.chat(system, messages, { maxTokens: 2000, webSearch: true });
     return { status: 200, data: { content: resp.text } };

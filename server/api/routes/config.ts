@@ -3,9 +3,21 @@
  * POST /api/config — switch provider at runtime
  */
 
+import { z } from 'zod';
 import { getProviderConfig, setProvider } from '../../providers/index';
 import type { AIProviderConfig } from '../../providers/index';
+import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
+
+const configSchema = z.object({
+  adminKey: z.string(),
+  provider: z.string().optional().default('anthropic'),
+  model: z.string().optional(),
+  apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
+  maxTokens: z.number().optional(),
+  webSearch: z.boolean().optional(),
+});
 
 export function registerConfigRoutes(handleRoute: RouteHandler) {
   handleRoute('GET', '/api/config', null, async () => {
