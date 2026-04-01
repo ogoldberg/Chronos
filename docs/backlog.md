@@ -197,3 +197,10 @@ Cross-reference discovered events before showing them.
 ### [x] Rate limiting on AI endpoints
 ### [x] Security: admin key for config, JSON parse safety, lat/lng coercion fix
 ### [x] Production Dockerfile with health check + pruned deps
+### [x] AI fact-checking pipeline (Wikidata + Wikipedia cross-reference)
+### [x] Real Earth coastlines on globe (7 continents, ~670 coordinates)
+### [x] Animated empire border overlays (Roman, Mongol, Ottoman, British, Han, Persian)
+### [x] Comparison view (side-by-side regional timelines)
+### [x] Classroom / presentation mode (3 preset tours, large text, voice)
+### [x] Streaming bug fixes (disconnect, flicker, Ollama buffering)
+### [x] UX fixes (voice threshold, arc scaling, mobile overflow)
