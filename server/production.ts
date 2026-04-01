@@ -66,7 +66,7 @@ async function main() {
   // API routes
   app.all('/api/*', async (req, res) => {
     try {
-      const result = await handleApiRequest(req.method, req.url, req.body || {});
+      const result = await handleApiRequest(req.method, req.url, req.body || {}, req.headers as Record<string, string | string[] | undefined>);
       res.status(result.status).json(result.data);
     } catch (err: any) {
       console.error(`[API] ${req.url} error:`, err.message, err.stack);

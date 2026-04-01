@@ -1,10 +1,11 @@
 import type { Plugin } from 'vite';
 import { getProvider, getProviderConfig, setProvider } from './providers/index';
 import type { AIProviderConfig } from './providers/index';
-import { initDB, upsertEvents, getEventsInRange } from './db';
+import { initDB, upsertEvents, upsertEvent, getEventsInRange, searchEvents, getUserProgress, saveUserProgress } from './db';
 import { initAuth, getAuth } from './auth';
 import { toNodeHandler } from 'better-auth/node';
-import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM, PARALLELS_SYSTEM, MYTHS_SYSTEM, QUIZ_SYSTEM, LENS_DISCOVERY_SYSTEM } from './prompts';
+import { DISCOVER_SYSTEM, INSIGHTS_SYSTEM, CHAT_SYSTEM, PARALLELS_SYSTEM, MYTHS_SYSTEM, QUIZ_SYSTEM, LENS_DISCOVERY_SYSTEM, WHATIF_SYSTEM } from './prompts';
+import { ANCHOR_EVENTS } from '../src/data/anchorEvents.ts';
 
 let dbReady = false;
 
@@ -80,6 +81,7 @@ export async function handleApiRequest(
   method: string,
   url: string,
   body: any,
+  reqHeaders?: Record<string, string | string[] | undefined>,
 ): Promise<{ status: number; data: any }> {
   const ai = getProvider();
 
@@ -315,6 +317,47 @@ export async function handleApiRequest(
     return { status: 200, data: { events: [] } };
   }
 
+  // POST /api/whatif — counterfactual alternate history explorer
+  if (method === 'POST' && url === '/api/whatif') {
+    if (!checkRateLimit('whatif')) {
+      return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
+    }
+    const { question } = body;
+    if (!question || typeof question !== 'string' || !question.trim()) {
+      return { status: 400, data: { error: 'A "question" string is required.' } };
+    }
+    if (question.length > 300) {
+      return { status: 400, data: { error: 'Question must be under 300 characters.' } };
+    }
+
+    const system = WHATIF_SYSTEM(question.trim());
+    const resp = await ai.chat(system, [
+      { role: 'user', content: `Generate a speculative alternate history timeline for: "${question.trim()}"` },
+    ], { maxTokens: 3000, webSearch: true });
+
+    const jsonObjMatch = resp.text.match(/\{[\s\S]*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
+    if (jsonObjMatch) {
+      try {
+        const parsed = JSON.parse(jsonObjMatch[0]);
+        if (Array.isArray(parsed.events)) {
+          return { status: 200, data: { events: parsed.events } };
+        }
+      } catch { /* fall through */ }
+    }
+
+    const jsonArrMatch = resp.text.match(/\[[\s\S]*\]/);
+    if (jsonArrMatch) {
+      try {
+        const events = JSON.parse(jsonArrMatch[0]);
+        if (Array.isArray(events)) {
+          return { status: 200, data: { events } };
+        }
+      } catch { /* fall through */ }
+    }
+
+    return { status: 200, data: { events: [] } };
+  }
+
   // POST /api/chat
   if (method === 'POST' && url === '/api/chat') {
     if (!checkRateLimit('chat')) {
@@ -333,6 +376,104 @@ export async function handleApiRequest(
     const system = CHAT_SYSTEM(context);
     const resp = await ai.chat(system, messages, { maxTokens: 2000, webSearch: true });
     return { status: 200, data: { content: resp.text } };
+  }
+
+  // POST /api/seed — seed anchor events into DB (admin-only, run once)
+  if (method === 'POST' && url === '/api/seed') {
+    if (!checkRateLimit('seed')) {
+      return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
+    }
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey) {
+      return { status: 403, data: { error: 'ADMIN_KEY not configured — seed endpoint disabled' } };
+    }
+    if (body.adminKey !== adminKey) {
+      return { status: 403, data: { error: 'Invalid admin key' } };
+    }
+    if (!dbReady) {
+      return { status: 503, data: { error: 'Database not available' } };
+    }
+
+    let seeded = 0;
+    for (const event of ANCHOR_EVENTS) {
+      await upsertEvent({
+        id: event.id,
+        title: event.title,
+        year: event.year,
+        timestamp: event.timestamp || undefined,
+        precision: event.precision || 'year',
+        emoji: event.emoji,
+        color: event.color,
+        description: event.description,
+        category: event.category,
+        source: 'anchor',
+        wiki: event.wiki,
+        lat: event.lat,
+        lng: event.lng,
+        geo_type: event.geoType,
+        path: event.path,
+        region: event.region,
+        max_span: event.maxSpan,
+        verified: true,
+      });
+      seeded++;
+    }
+    return { status: 200, data: { ok: true, seeded } };
+  }
+
+  // GET /api/search?q=...&limit=N — full-text search
+  if (method === 'GET' && url.startsWith('/api/search')) {
+    if (!checkRateLimit('search')) {
+      return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
+    }
+    const params = new URL(url, 'http://localhost').searchParams;
+    const q = params.get('q') || '';
+    if (!q.trim()) {
+      return { status: 400, data: { error: 'Query parameter "q" is required' } };
+    }
+    const limit = Math.min(parseInt(params.get('limit') || '20', 10), 100);
+
+    if (dbReady) {
+      const events = await searchEvents(q.trim(), limit);
+      return { status: 200, data: { events, source: 'database' } };
+    }
+    return { status: 200, data: { events: [], source: 'none' } };
+  }
+
+  // GET /api/user/progress — load user progress
+  if (method === 'GET' && url === '/api/user/progress') {
+    if (!dbReady) {
+      return { status: 503, data: { error: 'Database not available' } };
+    }
+    const authInstance = getAuth();
+    if (!authInstance) {
+      return { status: 401, data: { error: 'Auth not configured' } };
+    }
+    const headers = new Headers(reqHeaders as Record<string, string>);
+    const session = await authInstance.api.getSession({ headers });
+    if (!session?.user?.id) {
+      return { status: 401, data: { error: 'Not authenticated' } };
+    }
+    const progress = await getUserProgress(session.user.id);
+    return { status: 200, data: { progress } };
+  }
+
+  // POST /api/user/progress — save user progress
+  if (method === 'POST' && url === '/api/user/progress') {
+    if (!dbReady) {
+      return { status: 503, data: { error: 'Database not available' } };
+    }
+    const authInstance = getAuth();
+    if (!authInstance) {
+      return { status: 401, data: { error: 'Auth not configured' } };
+    }
+    const headers = new Headers(reqHeaders as Record<string, string>);
+    const session = await authInstance.api.getSession({ headers });
+    if (!session?.user?.id) {
+      return { status: 401, data: { error: 'Not authenticated' } };
+    }
+    await saveUserProgress(session.user.id, body);
+    return { status: 200, data: { ok: true } };
   }
 
   return { status: 404, data: { error: 'Not found' } };
@@ -416,7 +557,7 @@ export function apiPlugin(): Plugin {
           }
 
           const body = req.method === 'POST' ? await parseBody(req) : {};
-          const result = await handleApiRequest(req.method || 'GET', url, body);
+          const result = await handleApiRequest(req.method || 'GET', url, body, req.headers as Record<string, string | string[] | undefined>);
           res.writeHead(result.status, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(result.data));
         } catch (err: any) {

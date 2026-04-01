@@ -8,7 +8,7 @@ export interface TimelineEvent {
   color: string;
   description: string;
   category: 'cosmic' | 'geological' | 'evolutionary' | 'civilization' | 'modern';
-  source: 'anchor' | 'discovered';
+  source: 'anchor' | 'discovered' | 'personal';
   maxSpan?: number; // only show when viewport span <= this
 
   // Time precision

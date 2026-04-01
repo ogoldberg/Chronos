@@ -370,4 +370,111 @@ export function recordMythRevealed(): PlayerStats {
   return stats;
 }
 
+// ── Server sync ──
+let _isAuthenticated = false;
+
+export function setAuthenticated(auth: boolean): void {
+  _isAuthenticated = auth;
+}
+
+/**
+ * Sync current stats to the server.
+ * Only runs if user is authenticated.
+ */
+export async function syncToServer(): Promise<boolean> {
+  if (!_isAuthenticated) return false;
+  try {
+    const stats = load();
+    const resp = await fetch('/api/user/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        xp: stats.xp,
+        level: stats.level,
+        eventsViewed: stats.eventsViewed,
+        erasExplored: [...stats.erasExplored],
+        quizStreak: stats.quizStreak,
+        bestStreak: stats.bestStreak,
+        achievements: stats.achievements,
+        totalCorrect: stats.totalQuizCorrect,
+        totalAttempted: stats.totalQuizAttempted,
+        mythsRevealed: stats.mythsRevealed,
+      }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Load progress from server and merge with localStorage.
+ * Server values win for numeric fields if they're higher.
+ */
+export async function syncFromServer(): Promise<boolean> {
+  if (!_isAuthenticated) return false;
+  try {
+    const resp = await fetch('/api/user/progress', {
+      credentials: 'include',
+    });
+    if (!resp.ok) return false;
+    const data = await resp.json();
+    if (!data.progress) return false;
+
+    const local = load();
+    const remote = data.progress;
+
+    // Merge: take the higher value for numeric stats
+    local.xp = Math.max(local.xp, remote.xp ?? 0);
+    local.level = Math.max(local.level, remote.level ?? 1);
+    local.eventsViewed = Math.max(local.eventsViewed, remote.events_viewed ?? 0);
+    local.quizStreak = Math.max(local.quizStreak, remote.quiz_streak ?? 0);
+    local.bestStreak = Math.max(local.bestStreak, remote.best_streak ?? 0);
+    local.totalQuizCorrect = Math.max(local.totalQuizCorrect, remote.total_correct ?? 0);
+    local.totalQuizAttempted = Math.max(local.totalQuizAttempted, remote.total_attempted ?? 0);
+    local.mythsRevealed = Math.max(local.mythsRevealed, remote.myths_revealed ?? 0);
+
+    // Merge sets
+    const remoteEras: string[] = remote.eras_explored ?? [];
+    for (const era of remoteEras) local.erasExplored.add(era);
+
+    // Merge achievements
+    const remoteAchievements: string[] = remote.achievements ?? [];
+    for (const ach of remoteAchievements) {
+      if (!local.achievements.includes(ach)) local.achievements.push(ach);
+    }
+
+    save(local);
+    notify(local);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Auto-sync to server on important events.
+ * Called internally after level ups and achievement unlocks.
+ */
+function autoSync(): void {
+  if (_isAuthenticated) {
+    syncToServer().catch(() => {});
+  }
+}
+
+// Subscribe to stats changes for auto-sync on important events
+let _prevLevel = 0;
+let _prevAchCount = 0;
+
+subscribe((stats) => {
+  if (!_isAuthenticated) return;
+  // Auto-sync when level changes or new achievement unlocked
+  if (stats.level > _prevLevel || stats.achievements.length > _prevAchCount) {
+    autoSync();
+  }
+  _prevLevel = stats.level;
+  _prevAchCount = stats.achievements.length;
+});
+
 export { LEVEL_THRESHOLDS };

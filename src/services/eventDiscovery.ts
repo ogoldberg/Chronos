@@ -363,3 +363,84 @@ export function clearCache() {
   cellStates.clear();
   localStorage.removeItem(STORAGE_KEY);
 }
+
+/**
+ * Warm the in-memory cache from DB on startup.
+ * Checks /api/config to verify DB is available, then fetches
+ * anchor/discovered events for the default viewport range
+ * and populates the cell cache.
+ */
+export async function warmCacheFromDB(): Promise<number> {
+  try {
+    // Check if DB is available
+    const configResp = await fetch('/api/config');
+    if (!configResp.ok) return 0;
+
+    // Fetch broad range of events from DB
+    const ranges: Array<{ start: number; end: number; tierId: string; cellSize: number }> = [
+      { start: -14000000000, end: -1000000000, tierId: 'cosmic', cellSize: 2e9 },
+      { start: -1000000000, end: -1000000, tierId: 'geological', cellSize: 1e8 },
+      { start: -1000000, end: -10000, tierId: 'evolutionary', cellSize: 2e7 },
+      { start: -10000, end: 2030, tierId: 'historical', cellSize: 500 },
+    ];
+
+    let totalEvents = 0;
+
+    for (const range of ranges) {
+      try {
+        const resp = await fetch(`/api/events?start=${range.start}&end=${range.end}&limit=200`);
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        if (!data.events?.length) continue;
+
+        // Group events into cells and populate cell cache
+        const events: TimelineEvent[] = data.events.map((e: any) => ({
+          id: e.id,
+          title: e.title,
+          year: e.year,
+          emoji: e.emoji || '\ud83d\udccc',
+          color: e.color || '#888',
+          description: e.description || '',
+          category: e.category || 'civilization',
+          source: (e.source || 'discovered') as 'anchor' | 'discovered',
+          wiki: e.wiki,
+          maxSpan: e.max_span,
+          lat: e.lat,
+          lng: e.lng,
+          geoType: e.geo_type,
+          path: e.path,
+          region: e.region,
+          timestamp: e.timestamp,
+          precision: e.precision,
+        }));
+
+        // Group by cell
+        const cellGroups = new Map<string, TimelineEvent[]>();
+        for (const ev of events) {
+          const ci = Math.floor(ev.year / range.cellSize);
+          const key = cellKey(range.tierId, ci);
+          const group = cellGroups.get(key) || [];
+          group.push(ev);
+          cellGroups.set(key, group);
+        }
+
+        for (const [key, evts] of cellGroups) {
+          // Don't overwrite already-loaded cells
+          const existing = cellStates.get(key);
+          if (!existing || existing.status !== 'loaded') {
+            cellStates.set(key, { status: 'loaded', events: evts });
+          }
+        }
+
+        totalEvents += events.length;
+      } catch {
+        // Individual range fetch failed, continue
+      }
+    }
+
+    if (totalEvents > 0) saveCache();
+    return totalEvents;
+  } catch {
+    return 0;
+  }
+}
