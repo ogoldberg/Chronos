@@ -12,6 +12,7 @@ interface URLState {
 }
 
 export function readURLState(): URLState {
+  if (typeof window === 'undefined') return {};
   const params = new URLSearchParams(window.location.search);
   const state: URLState = {};
 
