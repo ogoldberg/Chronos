@@ -2,6 +2,7 @@ import type { TimelineEvent, Viewport } from '../types';
 import { getEra, ERAS } from '../data/eras';
 import { formatYear, formatYearShort } from '../utils/format';
 import { yearToPixel } from './viewport';
+import { REGION_LANES, matchEventToRegion } from '../data/regions';
 
 const TICK_STEPS = [
   1e10, 5e9, 2e9, 1e9, 5e8, 2e8, 1e8, 5e7, 2e7, 1e7,
@@ -31,6 +32,7 @@ export function renderTimeline(
   height: number,
   hoveredId: string | null,
   selectedId: string | null,
+  activeLanes?: Set<string>,
 ): HitTarget[] {
   const dpr = window.devicePixelRatio || 1;
   const W = width;
@@ -118,11 +120,43 @@ export function renderTimeline(
     return true;
   });
 
-  // Layout events with stagger to avoid overlap
+  // Lane mode: draw region bands
+  const lanesActive = activeLanes && activeLanes.size > 0;
+  const activeLaneList = lanesActive ? REGION_LANES.filter(l => activeLanes!.has(l.id)) : [];
+  const laneHeight = lanesActive ? Math.min(80, (H - 80) / (activeLaneList.length + 1)) : 0;
+  const laneStartY = lanesActive ? 70 : 0;
+
+  if (lanesActive) {
+    // Draw lane backgrounds and labels
+    for (let i = 0; i < activeLaneList.length; i++) {
+      const lane = activeLaneList[i];
+      const y = laneStartY + (i + 1) * laneHeight;
+
+      // Lane background band
+      ctx.fillStyle = lane.color + '08';
+      ctx.fillRect(0, y - laneHeight / 2, W, laneHeight);
+
+      // Lane separator
+      ctx.strokeStyle = lane.color + '20';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+
+      // Lane label
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = lane.color + '80';
+      ctx.fillText(`${lane.emoji} ${lane.label}`, 8, y);
+    }
+  }
+
+  // Layout events
   const hitTargets: HitTarget[] = [];
   const placed: { x: number; y: number }[] = [];
 
-  // Sort by importance (anchors first, then by absolute year desc)
   const sorted = [...visible].sort((a, b) => {
     if (a.source !== b.source) return a.source === 'anchor' ? -1 : 1;
     return Math.abs(b.year) - Math.abs(a.year);
@@ -132,21 +166,47 @@ export function renderTimeline(
     const x = yearToPixel(ev.year, vp, W);
     if (x < -50 || x > W + 50) continue;
 
-    // Stagger vertically to avoid overlap
-    let yOff = -30;
-    let tries = 0;
-    const direction = sorted.indexOf(ev) % 2 === 0 ? -1 : 1;
-    let baseY = timelineY + direction * 30;
+    let evY: number;
 
-    for (const p of placed) {
-      if (Math.abs(p.x - x) < 60) {
-        tries++;
-        baseY = timelineY + (tries % 2 === 0 ? -1 : 1) * (30 + tries * 22);
+    if (lanesActive) {
+      // Place event in its region lane
+      const regionId = matchEventToRegion(ev.lat, ev.lng);
+      const laneIdx = regionId ? activeLaneList.findIndex(l => l.id === regionId) : -1;
+
+      if (laneIdx >= 0) {
+        evY = laneStartY + (laneIdx + 1) * laneHeight;
+        // Micro-stagger within lane to avoid overlap
+        let stagger = 0;
+        for (const p of placed) {
+          if (Math.abs(p.x - x) < 50 && Math.abs(p.y - evY) < laneHeight * 0.4) {
+            stagger += 14;
+          }
+        }
+        evY += stagger % (laneHeight * 0.3) * (stagger % 2 === 0 ? 1 : -1);
+      } else {
+        // Events without coords go on the main timeline
+        evY = timelineY;
+        let tries = 0;
+        for (const p of placed) {
+          if (Math.abs(p.x - x) < 60 && Math.abs(p.y - timelineY) < 50) {
+            tries++;
+            evY = timelineY + (tries % 2 === 0 ? -1 : 1) * (30 + tries * 18);
+          }
+        }
       }
+    } else {
+      // Normal single-lane layout
+      let tries = 0;
+      const direction = sorted.indexOf(ev) % 2 === 0 ? -1 : 1;
+      let baseY = timelineY + direction * 30;
+      for (const p of placed) {
+        if (Math.abs(p.x - x) < 60) {
+          tries++;
+          baseY = timelineY + (tries % 2 === 0 ? -1 : 1) * (30 + tries * 22);
+        }
+      }
+      evY = baseY;
     }
-    yOff = baseY - timelineY;
-
-    const evY = timelineY + yOff;
     placed.push({ x, y: evY });
     hitTargets.push({ event: ev, x, y: evY });
 

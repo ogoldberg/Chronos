@@ -7,6 +7,7 @@ interface Props {
   viewport: Viewport;
   events: TimelineEvent[];
   selectedId: string | null;
+  activeLanes?: Set<string>;
   onViewportChange: (vp: Viewport) => void;
   onSelectEvent: (ev: TimelineEvent | null) => void;
   onHoverEvent: (ev: TimelineEvent | null) => void;
@@ -16,6 +17,7 @@ export default function TimelineCanvas({
   viewport,
   events,
   selectedId,
+  activeLanes,
   onViewportChange,
   onSelectEvent,
   onHoverEvent,
@@ -62,9 +64,10 @@ export default function TimelineCanvas({
       dims.w,
       dims.h,
       hoveredId,
-      selectedId
+      selectedId,
+      activeLanes,
     );
-  }, [viewport, events, dims, hoveredId, selectedId]);
+  }, [viewport, events, dims, hoveredId, selectedId, activeLanes]);
 
   // Wheel zoom
   const onWheel = useCallback(

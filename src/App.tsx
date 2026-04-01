@@ -12,6 +12,8 @@ import InsightsPanel from './components/InsightsPanel';
 import ChatPanel from './components/ChatPanel';
 import TourOverlay from './components/TourOverlay';
 import GlobePanel from './components/GlobePanel';
+import LaneToggle from './components/LaneToggle';
+import { REGION_LANES } from './data/regions';
 import './App.css';
 
 export default function App() {
@@ -24,6 +26,10 @@ export default function App() {
   const [voice, setVoice] = useState(false);
   const [cacheStats, setCacheStats] = useState({ cells: 0, events: 0 });
   const [showGlobe, setShowGlobe] = useState(true);
+  const [lanesEnabled, setLanesEnabled] = useState(false);
+  const [activeLanes, setActiveLanes] = useState<Set<string>>(
+    new Set(REGION_LANES.map(l => l.id))
+  );
 
   // Tour state
   const [tourStops, setTourStops] = useState<TourStop[] | null>(null);
@@ -194,12 +200,28 @@ export default function App() {
         viewport={viewport}
         events={allEvents}
         selectedId={selectedEvent?.id ?? null}
+        activeLanes={lanesEnabled ? activeLanes : undefined}
         onViewportChange={setViewport}
         onSelectEvent={setSelectedEvent}
         onHoverEvent={setHoveredEvent}
       />
 
       <EraChips viewport={viewport} onNavigate={(y, s) => animateTo(y, s)} />
+
+      {/* Lane toggle for parallel civilization comparison */}
+      <LaneToggle
+        lanesEnabled={lanesEnabled}
+        onToggle={() => setLanesEnabled(!lanesEnabled)}
+        activeLanes={activeLanes}
+        onToggleLane={(id) => {
+          setActiveLanes(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+        }}
+      />
 
       {/* Zoom level + discovery status + voice toggle */}
       <div className="top-right-controls">
