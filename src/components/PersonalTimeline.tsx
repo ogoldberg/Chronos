@@ -25,9 +25,6 @@ const EMOJI_OPTIONS = [
   '\u{1F6A0}', '\u{1F3AF}', '\u{1F31F}', '\u{1F308}', '\u{1F4F7}', '\u{1F52C}',
 ];
 
-// A set of well-known anchor events by year for "what was happening" feature
-const HISTORICAL_CONTEXT: Record<number, string[]> = {};
-
 function loadEvents(): PersonalEvent[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
