@@ -22,8 +22,12 @@ const rejectSchema = z.object({
 });
 
 export function registerModerationRoutes(route: RouteHandler, isDbReady: () => boolean) {
-  // List pending contributions
-  route('GET', '/api/moderation/queue', null, async (_body, url) => {
+  // List pending contributions (admin only — requires ADMIN_KEY)
+  route('GET', '/api/moderation/queue', null, async (_body, url, reqHeaders) => {
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey || reqHeaders?.['x-admin-key'] !== adminKey) {
+      return { status: 403, data: { error: 'Admin access required' } };
+    }
     if (!isDbReady()) {
       return { status: 503, data: { error: 'Database not available' } };
     }
@@ -44,8 +48,12 @@ export function registerModerationRoutes(route: RouteHandler, isDbReady: () => b
     return { status: 200, data: { items: result.rows } };
   });
 
-  // Approve a contribution
-  route('POST', '/api/moderation/approve', null, async (body) => {
+  // Approve a contribution (admin only)
+  route('POST', '/api/moderation/approve', null, async (body, _url, reqHeaders) => {
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey || reqHeaders?.['x-admin-key'] !== adminKey) {
+      return { status: 403, data: { error: 'Admin access required' } };
+    }
     if (!isDbReady()) {
       return { status: 503, data: { error: 'Database not available' } };
     }
@@ -73,8 +81,12 @@ export function registerModerationRoutes(route: RouteHandler, isDbReady: () => b
     return { status: 200, data: { item: result.rows[0] } };
   });
 
-  // Reject a contribution
-  route('POST', '/api/moderation/reject', null, async (body) => {
+  // Reject a contribution (admin only)
+  route('POST', '/api/moderation/reject', null, async (body, _url, reqHeaders) => {
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey || reqHeaders?.['x-admin-key'] !== adminKey) {
+      return { status: 403, data: { error: 'Admin access required' } };
+    }
     if (!isDbReady()) {
       return { status: 503, data: { error: 'Database not available' } };
     }
