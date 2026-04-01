@@ -280,6 +280,9 @@ export default function App() {
         {toolBtn('🎓 Classroom', 'classroom')}
         {toolBtn('📅 My Life', 'personal')}
         {toolBtn('🔮 What If', 'whatif')}
+        {toolBtn('⏩ Time-lapse', 'timelapse')}
+        {toolBtn('⚖️ Debate', 'debate')}
+        {toolBtn('📤 Export', 'export')}
         {toolBtn('👤 Account', 'auth')}
       </div>
 

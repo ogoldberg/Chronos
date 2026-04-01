@@ -17,6 +17,9 @@ const AuthPanel = lazy(() => import('./AuthPanel'));
 const SearchPanel = lazy(() => import('./SearchPanel'));
 const WhatIfPanel = lazy(() => import('./WhatIfPanel'));
 const PersonalTimeline = lazy(() => import('./PersonalTimeline'));
+const ExportPanel = lazy(() => import('./ExportPanel'));
+const TimeLapse = lazy(() => import('./TimeLapse'));
+const DebatePanel = lazy(() => import('./DebatePanel'));
 
 export default function PanelRouter() {
   const activePanel = useUIStore(s => s.activePanel);
@@ -127,6 +130,26 @@ export default function PanelRouter() {
       {activePanel === 'personal' && (
         <PersonalTimeline
           onAddEvents={addEvents}
+          onClose={closePanel}
+        />
+      )}
+      {activePanel === 'export' && (
+        <ExportPanel
+          viewport={viewport}
+          events={visibleEvents}
+          onClose={closePanel}
+        />
+      )}
+      {activePanel === 'timelapse' && (
+        <TimeLapse
+          onNavigate={animateTo}
+          onClose={closePanel}
+          currentYear={viewport.centerYear}
+        />
+      )}
+      {activePanel === 'debate' && (
+        <DebatePanel
+          onNavigate={animateTo}
           onClose={closePanel}
         />
       )}

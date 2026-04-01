@@ -4,6 +4,7 @@ export type PanelId =
   | 'chat' | 'globe' | 'comparison' | 'classroom'
   | 'currentEvents' | 'myths' | 'quiz' | 'lenses'
   | 'auth' | 'search' | 'whatif' | 'personal' | 'help'
+  | 'export' | 'timelapse' | 'debate'
   | null;
 
 interface UIState {

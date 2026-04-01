@@ -343,9 +343,50 @@ export async function upsertEvent(event: Partial<DBEvent> & { id: string; title:
 }
 
 export async function upsertEvents(events: Array<Partial<DBEvent> & { id: string; title: string; year: number }>) {
+  if (events.length === 0) return;
+  const db = getPool();
+
+  // Batch insert — single query instead of N sequential queries
+  const values: any[] = [];
+  const placeholders: string[] = [];
+  let paramIdx = 1;
+
   for (const event of events) {
-    await upsertEvent(event);
+    const params = [
+      event.id, event.title, event.year,
+      event.timestamp || null, event.precision || 'year',
+      event.emoji || '📌', event.color || '#888',
+      event.description || null, event.category || 'civilization',
+      event.source || 'discovered', event.zoom_tier || null,
+      event.max_span || null, event.wiki || null,
+      event.image_url || null, event.thumbnail_url || null,
+      event.video_url || null, event.audio_url || null,
+      event.media_caption || null, event.media_credit || null,
+      event.lat ?? null, event.lng ?? null,
+      event.geo_type || null,
+      event.path ? JSON.stringify(event.path) : null,
+      event.region ? JSON.stringify(event.region) : null,
+      event.verified ?? false,
+    ];
+    const indices = params.map(() => `$${paramIdx++}`);
+    placeholders.push(`(${indices.join(',')})`);
+    values.push(...params);
   }
+
+  await db.query(
+    `INSERT INTO events (id, title, year, timestamp, precision, emoji, color, description,
+       category, source, zoom_tier, max_span, wiki,
+       image_url, thumbnail_url, video_url, audio_url, media_caption, media_credit,
+       lat, lng, geo_type, path, region, verified)
+     VALUES ${placeholders.join(', ')}
+     ON CONFLICT (id) DO UPDATE SET
+       title = EXCLUDED.title,
+       description = EXCLUDED.description,
+       image_url = COALESCE(EXCLUDED.image_url, events.image_url),
+       thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, events.thumbnail_url),
+       updated_at = NOW()`,
+    values,
+  );
 }
 
 export async function searchEvents(query: string, limit = 50): Promise<DBEvent[]> {
