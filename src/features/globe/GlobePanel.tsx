@@ -6,6 +6,7 @@ import type { Empire } from '../../data/empires';
 import { REGION_LANES, matchEventToRegion } from '../../data/regions';
 import { getPaleoContinents, paleoEraLabel } from '../../data/paleoReconstruction';
 import RegionInfoCard from './RegionInfoCard';
+import { loadEarthTextures, isModernEarthYear } from './earthTextures';
 
 interface Props {
   events: TimelineEvent[];
@@ -158,19 +159,38 @@ function buildEmpireBorder(
 }
 
 // Vertex shader for the atmosphere
+// Atmosphere shader — Fresnel rim glow facing the camera. The back-side
+// sphere is rendered slightly larger than the planet so the rim wraps the
+// silhouette. We use an inverse-pow Fresnel so the glow is concentrated
+// on the limb where the atmosphere is optically thickest, fading toward
+// the centre. Sun direction modulates the intensity so the dawn/dusk
+// terminator gets a warmer hue.
 const ATMO_VERTEX = `
   varying vec3 vNormal;
+  varying vec3 vWorldPos;
   void main() {
     vNormal = normalize(normalMatrix * normal);
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldPos = wp.xyz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
 const ATMO_FRAGMENT = `
   varying vec3 vNormal;
+  varying vec3 vWorldPos;
+  uniform vec3 uSunDir;
   void main() {
-    float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
-    gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity;
+    // Camera-facing Fresnel: the back-side sphere makes vNormal point
+    // away from the camera at the centre and toward the camera at the
+    // limb, so we get a soft halo around the planet edge.
+    float fres = pow(1.0 - max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0))), 3.0);
+    // Day-side gets a bright cyan glow, night-side a deep indigo.
+    float sunDot = clamp(dot(normalize(vWorldPos), uSunDir) * 0.5 + 0.5, 0.0, 1.0);
+    vec3 dayColor = vec3(0.40, 0.72, 1.05);
+    vec3 nightColor = vec3(0.06, 0.10, 0.28);
+    vec3 col = mix(nightColor, dayColor, smoothstep(0.25, 0.75, sunDot));
+    gl_FragColor = vec4(col * fres * 1.4, fres);
   }
 `;
 
@@ -389,6 +409,13 @@ export default function GlobePanel({
   // changes so the canvas-painted paleogeography updates without rebuilding
   // the whole scene.
   const earthMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
+  const atmoMatRef = useRef<THREE.ShaderMaterial | null>(null);
+  /**
+   * True once the high-res Blue Marble + normal/specular textures have
+   * loaded from the CDN. Until then we paint the procedural canvas as a
+   * placeholder so the panel never shows a blank sphere.
+   */
+  const blueMarbleLoadedRef = useRef(false);
   // (Legacy) coastlines group — left as a thin accent over the texture
   // instead of the primary continent rendering.
   const coastlinesRef = useRef<THREE.Group | null>(null);
@@ -404,7 +431,7 @@ export default function GlobePanel({
   const dragRef = useRef({ active: false, x: 0, y: 0, moved: 0 });
   const targetRotationRef = useRef<{ x: number; y: number } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const [size, setSize] = useState<GlobeSize>('compact');
+  const [size, setSize] = useState<GlobeSize>('large');
   // The region the user clicked on — lat/lng, display name, and fetched info.
   const [clickedRegion, setClickedRegion] = useState<{
     lat: number;
@@ -437,7 +464,7 @@ export default function GlobePanel({
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.35;
+    renderer.toneMappingExposure = 2.1;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -446,19 +473,18 @@ export default function GlobePanel({
     globeRef.current = globeGroup;
     scene.add(globeGroup);
 
-    // Earth sphere — textured with a procedurally-painted equirectangular
-    // map of the paleogeography at the current year. The canvas is built
-    // in a side-effect below on first render; for now we give the material
-    // a fallback ocean color so the sphere isn't black while the first
-    // texture is being generated.
-    const earthGeom = new THREE.SphereGeometry(RADIUS, 96, 96);
+    // Earth sphere — high-poly so normal maps look smooth, white so the
+    // texture colors pass through unchanged. The colour map starts as the
+    // procedural canvas (so the panel paints something instantly) and is
+    // upgraded to NASA Blue Marble below as soon as the CDN load resolves.
+    const earthGeom = new THREE.SphereGeometry(RADIUS, 128, 128);
     const earthMat = new THREE.MeshPhongMaterial({
-      color: 0xffffff,         // white so the texture colors pass through unchanged
-      emissive: 0x030812,      // very faint self-illumination on the night side
-      // Much dimmer specular — the bright ocean highlight was the main
-      // source of glare. Keep just enough to hint at water reflectance.
-      specular: 0x2a4868,
-      shininess: 8,
+      color: 0xffffff,
+      // A subtle warm emissive lifts the night side from pure black so
+      // the unlit hemisphere reads as deep ocean rather than void.
+      emissive: 0x081428,
+      specular: 0x6080a0,
+      shininess: 22,
       transparent: false,
     });
     earthMatRef.current = earthMat;
@@ -494,15 +520,22 @@ export default function GlobePanel({
     }
     globeGroup.add(gridGroup);
 
-    // Atmosphere glow
-    const atmoGeom = new THREE.SphereGeometry(RADIUS * 1.15, 64, 64);
+    // Atmosphere glow — back-side sphere with a Fresnel rim shader.
+    // The sun direction uniform is updated every frame from the directional
+    // light so the dawn/dusk terminator picks up a warmer hue.
+    const atmoGeom = new THREE.SphereGeometry(RADIUS * 1.18, 96, 96);
     const atmoMat = new THREE.ShaderMaterial({
       vertexShader: ATMO_VERTEX,
       fragmentShader: ATMO_FRAGMENT,
+      uniforms: {
+        uSunDir: { value: new THREE.Vector3(1, 0.4, 0.8).normalize() },
+      },
       side: THREE.BackSide,
       blending: THREE.AdditiveBlending,
       transparent: true,
+      depthWrite: false,
     });
+    atmoMatRef.current = atmoMat;
     globeGroup.add(new THREE.Mesh(atmoGeom, atmoMat));
 
     // Markers group
@@ -531,21 +564,55 @@ export default function GlobePanel({
     pickSphereRef.current = pickSphere;
     globeGroup.add(pickSphere);
 
-    // Lighting — tuned to give a real day/night terminator. The directional
-    // "sun" light is strong; a dim ambient keeps the night side from going
-    // fully black (Earthlight / reflected starlight analogue); a small cool
-    // rim light on the opposite side implies atmospheric scattering on the
-    // limb so the night edge doesn't look like a flat cutoff.
-    // Bright, evenly-lit globe. Without clouds there's nothing to cause
-    // specular glare, so we can crank everything up without losing shading.
-    const ambient = new THREE.AmbientLight(0x7a94b4, 1.6);
+    // Lighting — the sun is positioned slightly above and to the right of
+    // the camera so the daylit hemisphere faces the viewer with a soft
+    // terminator running off the upper-right limb. A warm fill bounces up
+    // from below to suggest atmospheric scattering, and a dim cool rim
+    // catches the edge of the night side so it doesn't go pure black.
+    const ambient = new THREE.AmbientLight(0x8aa4c8, 1.4);
     scene.add(ambient);
-    const sun = new THREE.DirectionalLight(0xfff5d8, 2.0);
-    sun.position.set(6, 2.5, 5);
+    const sun = new THREE.DirectionalLight(0xfff5e0, 2.6);
+    sun.position.set(2.5, 1.8, 6);
     scene.add(sun);
-    const rim = new THREE.DirectionalLight(0x6e9ed0, 0.6);
-    rim.position.set(-6, -1, -4);
-    scene.add(rim);
+    const fill = new THREE.DirectionalLight(0x6e9ed0, 0.65);
+    fill.position.set(-3, -2, 4);
+    scene.add(fill);
+
+    // Sync the atmosphere shader's sun direction with the sun light, in
+    // world space — the back-side sphere uses the same world position so
+    // the dawn/dusk warmth wraps the limb consistently.
+    if (atmoMatRef.current) {
+      const dir = new THREE.Vector3().copy(sun.position).normalize();
+      atmoMatRef.current.uniforms.uSunDir.value.copy(dir);
+    }
+
+    // Kick off the high-res Blue Marble texture load. The procedural
+    // canvas painted by the bucket effect below is used as a placeholder
+    // until the CDN textures arrive. Once they do, we swap the colour
+    // map + apply the normal and specular maps for ocean glint and
+    // terrain shading. We only flip to the real texture if the user is
+    // viewing a modern era (post-Holocene); for deeper time the
+    // procedural paleogeography is more accurate.
+    loadEarthTextures()
+      .then((tex) => {
+        blueMarbleLoadedRef.current = true;
+        const mat = earthMatRef.current;
+        if (!mat) return;
+        // Always assign normal + specular even before colour swap; they
+        // have no visible effect until the colour map is swapped to the
+        // matching Blue Marble.
+        mat.normalMap = tex.normal;
+        mat.normalScale = new THREE.Vector2(0.85, 0.85);
+        mat.specularMap = tex.specular;
+        mat.needsUpdate = true;
+        // The texture-bucket effect runs again whenever currentYear or
+        // earthTextureBucket changes, so we don't need to swap the colour
+        // map here — that effect will see blueMarbleLoadedRef and pick
+        // the real texture for modern years.
+      })
+      .catch((err) => {
+        console.warn('[GlobePanel] Earth texture load failed, staying on procedural canvas', err);
+      });
 
     // Stars background — stored in a ref so the paleogeographic effect can
     // rebuild it when the time period changes. At the Big Bang (13.8 Ga)
@@ -849,7 +916,31 @@ export default function GlobePanel({
   useEffect(() => {
     const mat = earthMatRef.current;
     if (!mat) return;
-    const canvas = buildEarthTexture(earthTextureBucket * 1e6);
+    const bucketYear = earthTextureBucket * 1e6;
+
+    // For modern years (post-Holocene) prefer the high-res NASA Blue
+    // Marble texture loaded asynchronously in the init effect. The first
+    // attempt may run before the CDN load resolves; in that case we fall
+    // through to the procedural canvas, and a follow-up effect will swap
+    // to the real texture once it's ready.
+    if (isModernEarthYear(bucketYear) && blueMarbleLoadedRef.current) {
+      loadEarthTextures().then((tex) => {
+        const old = mat.map;
+        mat.map = tex.color;
+        mat.needsUpdate = true;
+        // Don't dispose the cached Blue Marble texture; only dispose if
+        // the previous map was a CanvasTexture from the procedural path.
+        if (old && old !== tex.color && (old as THREE.Texture).image instanceof HTMLCanvasElement) {
+          old.dispose();
+        }
+      });
+      return;
+    }
+
+    // Deep-time fallback: the procedural canvas paints continents using
+    // the paleo-reconstruction Euler rotations so the user sees plausible
+    // continental drift through deep time.
+    const canvas = buildEarthTexture(bucketYear);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 4;
@@ -858,9 +949,35 @@ export default function GlobePanel({
     mat.map = texture;
     mat.needsUpdate = true;
     // Dispose the old texture immediately so its GPU upload doesn't stay
-    // pinned. The HTMLCanvasElement that backed the previous texture is
-    // unreferenced after this scope exits and is collected normally.
-    if (old) old.dispose();
+    // pinned. Only dispose CanvasTextures — the cached Blue Marble must
+    // survive across swaps.
+    if (old && (old as THREE.Texture).image instanceof HTMLCanvasElement) {
+      old.dispose();
+    }
+  }, [earthTextureBucket]);
+
+  // When the Blue Marble finishes loading after a modern-year viewport
+  // is already showing, swap in the real texture. The init-effect's then()
+  // doesn't itself trigger a re-render, so we use a tick from a separate
+  // ref to nudge the bucket effect to re-run.
+  useEffect(() => {
+    let cancelled = false;
+    loadEarthTextures().then(() => {
+      if (cancelled) return;
+      const mat = earthMatRef.current;
+      if (!mat) return;
+      if (!isModernEarthYear(earthTextureBucket * 1e6)) return;
+      loadEarthTextures().then((tex) => {
+        if (cancelled) return;
+        const old = mat.map;
+        mat.map = tex.color;
+        mat.needsUpdate = true;
+        if (old && old !== tex.color && (old as THREE.Texture).image instanceof HTMLCanvasElement) {
+          old.dispose();
+        }
+      });
+    });
+    return () => { cancelled = true; };
   }, [earthTextureBucket]);
 
   // Rebuild the star field for the current time. Far back in cosmic time
@@ -1064,12 +1181,12 @@ export default function GlobePanel({
       : size === 'large'
       ? {
           position: 'absolute',
-          top: 55,
-          right: 20,
-          width: 640,
-          height: 640,
-          maxWidth: 'calc(100vw - 40px)',
-          maxHeight: 'calc(100vh - 100px)',
+          top: 70,
+          right: 24,
+          width: 520,
+          height: 580,
+          maxWidth: 'calc(100vw - 48px)',
+          maxHeight: 'calc(100vh - 120px)',
         }
       : {
           position: 'absolute',
@@ -1088,51 +1205,79 @@ export default function GlobePanel({
       onMouseLeave={onMouseLeavePanel}
       style={{
         ...panelStyle,
-        background: 'rgba(13, 17, 23, 0.85)',
-        borderRadius: 16,
-        border: '1px solid rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(20px)',
+        background: 'rgba(10, 14, 26, 0.92)',
+        borderRadius: 2,
+        border: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
         overflow: 'hidden',
         zIndex: size === 'fullscreen' ? 50 : 25,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+        fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
       }}
     >
-      {/* Header */}
+      {/* Editorial header — small-caps eyebrow + italic era label */}
       <div style={{
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
-        padding: '8px 12px',
+        padding: '14px 18px 18px',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'space-between',
         zIndex: 2,
-        background: 'linear-gradient(rgba(13,17,23,0.8), transparent)',
+        background: 'linear-gradient(180deg, rgba(10,14,26,0.85) 0%, rgba(10,14,26,0.4) 60%, transparent 100%)',
+        pointerEvents: 'none',
       }}>
-        <span style={{ color: '#ffffff60', fontSize: 10, fontWeight: 600, letterSpacing: 1 }}>
-          {isCosmicScale ? '🌌 COSMOS' : '🌍 EARTH'}
-          <span style={{ marginLeft: 8, color: '#60a5fa', fontWeight: 600, letterSpacing: 0 }}>
+        <div style={{ pointerEvents: 'auto', minWidth: 0 }}>
+          <div style={{
+            fontSize: 10,
+            fontWeight: 500,
+            letterSpacing: '0.18em',
+            color: 'var(--paper-ghost, #ffffff45)',
+            textTransform: 'uppercase',
+            fontFamily: 'var(--font-display, Fraunces, serif)',
+          }}>
+            {isCosmicScale ? 'Cosmos' : 'Earth'}
+          </div>
+          <div style={{
+            fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+            fontStyle: 'italic',
+            fontSize: 16,
+            color: 'var(--paper, #f5f1e8)',
+            letterSpacing: '0.01em',
+            marginTop: 2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
             {paleoEraLabel(currentYear)}
-          </span>
+          </div>
           {size !== 'compact' && (
-            <span style={{ marginLeft: 8, color: '#ffffff40', fontWeight: 500, letterSpacing: 0 }}>
-              Click the globe to learn about any region
-            </span>
+            <div style={{
+              fontFamily: 'var(--font-display, Fraunces, serif)',
+              fontStyle: 'italic',
+              fontSize: 11,
+              color: 'var(--paper-ghost, #ffffff40)',
+              marginTop: 4,
+            }}>
+              click the globe to read about any region
+            </div>
           )}
-        </span>
-        <div style={{ display: 'flex', gap: 4 }}>
+        </div>
+        <div style={{ display: 'flex', gap: 8, pointerEvents: 'auto' }}>
           <button
             onClick={() => setSize(size === 'fullscreen' ? 'compact' : size === 'large' ? 'fullscreen' : 'large')}
             title={size === 'fullscreen' ? 'Shrink' : 'Expand'}
-            style={headerBtnStyle}
+            style={editorialHeaderBtnStyle}
           >
-            {size === 'fullscreen' ? '⊟' : '⛶'}
+            {size === 'fullscreen' ? '\u2212' : '\u2922'}
           </button>
           {size === 'compact' && (
-            <button onClick={() => setCollapsed(true)} style={headerBtnStyle}>−</button>
+            <button onClick={() => setCollapsed(true)} style={editorialHeaderBtnStyle}>&minus;</button>
           )}
-          <button onClick={onClose} style={headerBtnStyle}>✕</button>
+          <button onClick={onClose} style={editorialHeaderBtnStyle} aria-label="Close">&times;</button>
         </div>
       </div>
 
@@ -1198,4 +1343,21 @@ const headerBtnStyle: React.CSSProperties = {
   fontSize: 14,
   padding: '2px 6px',
   lineHeight: 1,
+};
+
+const editorialHeaderBtnStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid var(--hairline, rgba(255,255,255,0.12))',
+  borderRadius: 2,
+  color: 'var(--paper-mute, #ffffff90)',
+  cursor: 'pointer',
+  fontFamily: 'var(--font-display, Fraunces, serif)',
+  fontSize: 14,
+  width: 26,
+  height: 26,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  lineHeight: 1,
+  padding: 0,
 };
