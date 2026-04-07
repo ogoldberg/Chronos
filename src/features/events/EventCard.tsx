@@ -13,6 +13,23 @@ interface Props {
   onAskGuide: (question: string) => void;
 }
 
+/** Shared shape for the trio of action buttons at the bottom of the card. */
+const EVENT_ACTION_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: 0,
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--paper-mute, #ffffff90)',
+  textDecoration: 'none',
+  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+  fontStyle: 'italic',
+  fontSize: 13,
+  letterSpacing: '0.01em',
+  cursor: 'pointer',
+};
+
 export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [wiki, setWiki] = useState<WikiData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -283,9 +300,10 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         )}
         {wiki?.extract && (
           <div style={{
-            background: 'rgba(255,255,255,0.04)',
-            borderRadius: 10,
-            padding: 14,
+            background: 'transparent',
+            borderTop: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+            borderBottom: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+            padding: '14px 0',
             marginBottom: 16,
           }}>
             <div style={{
@@ -296,27 +314,29 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
             }}>
               <div style={{
                 fontSize: 10,
-                color: '#ffffff50',
-                fontWeight: 600,
-                letterSpacing: 1,
+                color: 'var(--paper-ghost, #ffffff45)',
+                fontWeight: 500,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-display, Fraunces, serif)',
               }}>
-                WIKIPEDIA
+                Wikipedia
               </div>
               <button
                 onClick={() => setWikiExpanded(v => !v)}
                 style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 6,
-                  color: '#ffffffa0',
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: '3px 10px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--paper-mute, #ffffff80)',
+                  fontSize: 11,
+                  fontStyle: 'italic',
+                  padding: '2px 0',
                   cursor: 'pointer',
-                  letterSpacing: 0.5,
+                  letterSpacing: '0.04em',
+                  fontFamily: 'var(--font-display, Fraunces, serif)',
                 }}
               >
-                {wikiExpanded ? 'COLLAPSE' : 'EXPAND'}
+                {wikiExpanded ? 'collapse \u2191' : 'read more \u2193'}
               </button>
             </div>
             {/*
@@ -527,69 +547,48 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {/* Actions — flat editorial buttons, hairline borders, serif text */}
+        <div style={{
+          display: 'flex',
+          gap: 0,
+          marginTop: 8,
+          borderTop: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+          paddingTop: 14,
+        }}>
           {wiki?.url && (
             <a
               href={wiki.url}
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '8px 14px',
-                background: 'rgba(255,255,255,0.08)',
-                borderRadius: 8,
-                color: '#ffffffcc',
-                textDecoration: 'none',
-                fontSize: 12,
-                border: '1px solid rgba(255,255,255,0.1)',
-                cursor: 'pointer',
+                ...EVENT_ACTION_STYLE,
+                marginRight: 14,
               }}
             >
-              📖 Read Full Article ↗
+              Read full article &rarr;
             </a>
           )}
           <button
             onClick={() => onAskGuide(`Tell me more about ${event.title} (${formatYear(event.year)}). What made this significant and how does it connect to other events?`)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '8px 14px',
-              background: `${event.color}20`,
-              borderRadius: 8,
-              color: event.color,
-              fontSize: 12,
-              border: `1px solid ${event.color}40`,
-              cursor: 'pointer',
-            }}
+            style={{ ...EVENT_ACTION_STYLE, marginRight: 14, background: 'transparent' }}
           >
-            💬 Ask Guide
+            Ask the guide
           </button>
           <button
             onClick={() => {
               const url = window.location.href;
               navigator.clipboard.writeText(url).then(() => {
                 const btn = document.activeElement as HTMLButtonElement;
-                if (btn) { btn.textContent = '✓ Copied!'; setTimeout(() => { btn.textContent = '🔗 Share'; }, 1500); }
+                if (btn) {
+                  const orig = btn.textContent;
+                  btn.textContent = 'Copied';
+                  setTimeout(() => { btn.textContent = orig; }, 1500);
+                }
               });
             }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '8px 14px',
-              background: 'rgba(255,255,255,0.08)',
-              borderRadius: 8,
-              color: '#ffffffaa',
-              fontSize: 12,
-              border: '1px solid rgba(255,255,255,0.1)',
-              cursor: 'pointer',
-            }}
+            style={{ ...EVENT_ACTION_STYLE, background: 'transparent', marginLeft: 'auto' }}
           >
-            🔗 Share
+            Share
           </button>
         </div>
       </div>
