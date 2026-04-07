@@ -5,83 +5,42 @@ const STORAGE_KEY = 'chronos_onboarded';
 interface TutorialStep {
   target: string;
   text: string;
-  arrowDirection: 'up' | 'down' | 'left' | 'right';
+  arrowDirection: 'up' | 'down' | 'left' | 'right' | 'center';
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
     target: 'canvas',
-    text: 'Scroll to zoom in and out. Drag to pan through time.',
-    arrowDirection: 'down',
+    text: 'Scroll to zoom through time. Drag to pan. Click any event for the full story.',
+    arrowDirection: 'center',
   },
   {
-    target: '.era-chips, [class*="era-chip"], [class*="EraChip"]',
-    text: 'Jump to any era with these quick-nav buttons.',
+    target: 'header [data-onboard="era-indicator"]',
+    text: 'Click the era and year up here to jump to any moment in history.',
     arrowDirection: 'up',
   },
   {
-    target: '[class*="chat"], button:has(> :first-child)',
-    text: 'Ask me anything about history. I\'ll take you there.',
-    arrowDirection: 'up',
-  },
-  {
-    target: '.globe-toggle',
-    text: 'See where events happened on the 3D globe.',
-    arrowDirection: 'left',
-  },
-  {
-    target: '[style*="bottom: 20px"]',
-    text: 'Explore quizzes, myths, debates, and more.',
+    target: 'header [data-onboard="palette"]',
+    text: 'Press \u2318K to open the command palette \u2014 every feature lives here.',
     arrowDirection: 'up',
   },
 ];
 
-function getTargetRect(step: TutorialStep, stepIndex: number): DOMRect | null {
+function getTargetRect(_step: TutorialStep, stepIndex: number): DOMRect | null {
   // Step 0 targets the canvas element
   if (stepIndex === 0) {
     const el = document.querySelector('canvas');
     return el?.getBoundingClientRect() ?? null;
   }
-  // Step 4 targets the bottom toolbar
-  if (stepIndex === 4) {
-    const toolbar = document.querySelector('[style*="bottom"]');
-    // Find the bottom toolbar more reliably
-    const allDivs = document.querySelectorAll('.chronos-root > div');
-    for (const div of allDivs) {
-      const style = (div as HTMLElement).style;
-      if (style.bottom === '20px' && style.display === 'flex') {
-        return div.getBoundingClientRect();
-      }
-    }
-    return toolbar?.getBoundingClientRect() ?? null;
-  }
-  // Step 3 targets globe toggle
-  if (stepIndex === 3) {
-    const el = document.querySelector('.globe-toggle');
-    return el?.getBoundingClientRect() ?? null;
-  }
-  // Step 1 targets era chips
+  // Step 1 targets the era/year indicator in the editorial header.
   if (stepIndex === 1) {
-    // EraChips is typically positioned at the bottom-left area
-    const selectors = step.target.split(', ');
-    for (const sel of selectors) {
-      try {
-        const el = document.querySelector(sel);
-        if (el) return el.getBoundingClientRect();
-      } catch { /* skip invalid selectors */ }
-    }
-    return null;
+    const el = document.querySelector('header [data-onboard="era-indicator"]');
+    return (el as HTMLElement | null)?.getBoundingClientRect() ?? null;
   }
-  // Step 2 targets chat button
+  // Step 2 targets the search/command palette button.
   if (stepIndex === 2) {
-    // Find the chat button in the bottom toolbar
-    const buttons = document.querySelectorAll('button');
-    for (const btn of buttons) {
-      if (btn.textContent?.includes('Chat')) {
-        return btn.getBoundingClientRect();
-      }
-    }
-    return null;
+    const el = document.querySelector('header [data-onboard="palette"]');
+    return (el as HTMLElement | null)?.getBoundingClientRect() ?? null;
   }
   return null;
 }
@@ -108,65 +67,77 @@ const welcomeContainerStyle: CSSProperties = {
 };
 
 const titleStyle: CSSProperties = {
-  fontSize: 48,
-  fontWeight: 700,
-  color: '#ffffff',
-  letterSpacing: '-0.5px',
+  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+  fontSize: 64,
+  fontWeight: 500,
+  color: 'var(--paper, #f5f1e8)',
+  letterSpacing: '-0.01em',
   textAlign: 'center',
   margin: 0,
+  lineHeight: 1.05,
 };
 
 const subtitleStyle: CSSProperties = {
+  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+  fontStyle: 'italic',
   fontSize: 18,
-  color: 'rgba(255, 255, 255, 0.5)',
+  color: 'var(--paper-mute, rgba(255,255,255,0.6))',
   textAlign: 'center',
-  margin: '0 0 32px',
+  margin: '8px 0 36px',
   fontWeight: 400,
+  letterSpacing: '0.01em',
 };
 
 const startBtnStyle: CSSProperties = {
-  padding: '14px 40px',
-  fontSize: 16,
-  fontWeight: 600,
-  background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 14,
+  padding: '12px 28px',
+  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+  fontSize: 15,
+  fontWeight: 400,
+  fontStyle: 'italic',
+  background: 'transparent',
+  color: 'var(--paper, #f5f1e8)',
+  border: '1px solid var(--hairline-strong, rgba(255,255,255,0.25))',
+  borderRadius: 2,
   cursor: 'pointer',
-  transition: 'transform 0.2s, box-shadow 0.2s',
-  boxShadow: '0 4px 24px rgba(59, 130, 246, 0.35)',
+  transition: 'border-color 200ms, background 200ms',
+  letterSpacing: '0.02em',
 };
 
 const skipLinkStyle: CSSProperties = {
-  marginTop: 16,
+  marginTop: 14,
   background: 'none',
   border: 'none',
-  color: 'rgba(255, 255, 255, 0.3)',
+  color: 'var(--paper-ghost, rgba(255,255,255,0.35))',
+  fontFamily: 'var(--font-display, Fraunces, serif)',
+  fontStyle: 'italic',
   fontSize: 13,
   cursor: 'pointer',
-  textDecoration: 'underline',
+  textDecoration: 'none',
   padding: '4px 8px',
 };
 
 const tooltipCardStyle: CSSProperties = {
   position: 'fixed',
   zIndex: 10001,
-  background: 'rgba(10, 14, 22, 0.94)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-  borderRadius: 16,
+  background: 'rgba(10, 14, 26, 0.96)',
+  border: '1px solid var(--hairline, rgba(255,255,255,0.1))',
+  borderRadius: 2,
   backdropFilter: 'blur(20px)',
-  boxShadow: '0 8px 40px rgba(0, 0, 0, 0.5)',
+  WebkitBackdropFilter: 'blur(20px)',
+  boxShadow: '0 24px 60px rgba(0, 0, 0, 0.6)',
   padding: '20px 24px',
-  maxWidth: 340,
-  minWidth: 260,
+  maxWidth: 360,
+  minWidth: 280,
   transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
 };
 
 const tooltipTextStyle: CSSProperties = {
-  color: 'rgba(255, 255, 255, 0.85)',
-  fontSize: 14,
-  lineHeight: 1.6,
-  margin: '0 0 18px',
+  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+  color: 'var(--paper, #f5f1e8)',
+  fontSize: 15,
+  lineHeight: 1.55,
+  margin: '0 0 20px',
 };
 
 const tooltipButtonRowStyle: CSSProperties = {
@@ -177,21 +148,26 @@ const tooltipButtonRowStyle: CSSProperties = {
 };
 
 const nextBtnStyle: CSSProperties = {
-  padding: '8px 22px',
+  padding: '6px 16px',
+  fontFamily: 'var(--font-display, Fraunces, serif)',
+  fontStyle: 'italic',
   fontSize: 13,
-  fontWeight: 600,
-  background: 'rgba(59, 130, 246, 0.9)',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 10,
+  fontWeight: 400,
+  background: 'transparent',
+  color: 'var(--paper, #f5f1e8)',
+  border: '1px solid var(--hairline-strong, rgba(255,255,255,0.25))',
+  borderRadius: 2,
   cursor: 'pointer',
-  transition: 'background 0.2s',
+  transition: 'border-color 0.2s',
+  letterSpacing: '0.02em',
 };
 
 const skipBtnStyle: CSSProperties = {
   background: 'none',
   border: 'none',
-  color: 'rgba(255, 255, 255, 0.3)',
+  color: 'var(--paper-ghost, rgba(255,255,255,0.35))',
+  fontFamily: 'var(--font-display, Fraunces, serif)',
+  fontStyle: 'italic',
   fontSize: 12,
   cursor: 'pointer',
   padding: '4px 8px',
@@ -213,13 +189,19 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
             width: i === current ? 18 : 6,
             height: 6,
             borderRadius: 3,
-            background: i === current ? '#3b82f6' : 'rgba(255, 255, 255, 0.15)',
+            background: i === current ? 'var(--paper, #f5f1e8)' : 'rgba(255, 255, 255, 0.15)',
             transition: 'all 0.3s ease',
           }}
         />
       ))}
-      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 8 }}>
-        {current + 1}/{total}
+      <span style={{
+        fontFamily: 'var(--font-display, Fraunces, serif)',
+        fontStyle: 'italic',
+        fontSize: 12,
+        color: 'var(--paper-ghost, rgba(255,255,255,0.4))',
+        marginLeft: 10,
+      }}>
+        {current + 1} / {total}
       </span>
     </div>
   );
@@ -263,7 +245,7 @@ function SpotlightOverlay({ rect }: { rect: DOMRect | null }) {
         rx={r}
         ry={r}
         fill="none"
-        stroke="rgba(59, 130, 246, 0.3)"
+        stroke="rgba(245, 241, 232, 0.35)"
         strokeWidth={2}
       >
         <animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite" />
@@ -273,6 +255,7 @@ function SpotlightOverlay({ rect }: { rect: DOMRect | null }) {
 }
 
 function ArrowPointer({ direction, style }: { direction: string; style?: CSSProperties }) {
+  if (direction === 'center') return null;
   const arrowChar =
     direction === 'up' ? '↑' :
     direction === 'down' ? '↓' :
@@ -282,7 +265,7 @@ function ArrowPointer({ direction, style }: { direction: string; style?: CSSProp
     <span
       style={{
         fontSize: 22,
-        color: '#3b82f6',
+        color: 'var(--paper, #f5f1e8)',
         display: 'inline-block',
         animation: 'onboardingBounce 1.2s ease-in-out infinite',
         ...style,
@@ -297,7 +280,7 @@ function getTooltipPosition(
   rect: DOMRect | null,
   arrowDirection: string,
 ): CSSProperties {
-  if (!rect) {
+  if (!rect || arrowDirection === 'center') {
     return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
   }
 

@@ -71,6 +71,7 @@ export default function EditorialHeader({ viewport, onOpenDatePicker, onOpenPale
       <button
         onClick={onOpenDatePicker}
         title="Jump to a specific date or era"
+        data-onboard="era-indicator"
         style={{
           pointerEvents: 'auto',
           background: 'transparent',
@@ -170,6 +171,7 @@ export default function EditorialHeader({ viewport, onOpenDatePicker, onOpenPale
         <button
           onClick={onOpenPalette}
           title="Open command palette"
+          data-onboard="palette"
           style={{
             display: 'flex',
             alignItems: 'center',
