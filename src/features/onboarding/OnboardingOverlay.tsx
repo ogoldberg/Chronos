@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback, type CSSProperties } from 'react';
 
 const STORAGE_KEY = 'chronos_onboarded';
 
+const IS_MAC = typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+const PALETTE_SHORTCUT = IS_MAC ? '\u2318K' : 'Ctrl+K';
+
 interface TutorialStep {
   target: string;
   text: string;
@@ -21,7 +25,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     target: 'header [data-onboard="palette"]',
-    text: 'Press \u2318K to open the command palette \u2014 every feature lives here.',
+    text: `Press ${PALETTE_SHORTCUT} to open the command palette \u2014 every feature lives here.`,
     arrowDirection: 'up',
   },
 ];

@@ -26,6 +26,10 @@ interface Props {
  * That's it. No era chips, no toolbar, no badges. Everything else
  * recedes into the canvas or hides behind the palette.
  */
+/** True on macOS / iPad / iPhone, where the modifier key is Cmd (⌘). */
+const IS_MAC = typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+
 export default function EditorialHeader({ viewport, onOpenDatePicker, onOpenPalette }: Props) {
   const era = getEra(viewport.centerYear);
   const yearLabel = formatYear(viewport.centerYear);
@@ -210,7 +214,7 @@ export default function EditorialHeader({ viewport, onOpenDatePicker, onOpenPale
               color: 'var(--paper-soft)',
             }}
           >
-            ⌘K
+            {IS_MAC ? '\u2318K' : 'Ctrl K'}
           </kbd>
         </button>
       </div>
