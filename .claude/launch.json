@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "chronos-dev",
+      "runtimeExecutable": "/tmp/dev-wrapper.sh",
+      "runtimeArgs": [],
+      "port": 5173
+    }
+  ]
+}

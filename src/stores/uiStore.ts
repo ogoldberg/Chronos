@@ -55,7 +55,7 @@ export const useUIStore = create<UIState>((set) => ({
   openPanel: (panel) => set({ activePanel: panel }),
   closePanel: () => set({ activePanel: null }),
 
-  showGlobe: true,
+  showGlobe: false,
   toggleGlobe: () => set(s => ({ showGlobe: !s.showGlobe })),
 
   voice: false,

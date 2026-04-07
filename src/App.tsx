@@ -14,7 +14,6 @@ import PeriodCard from './features/period/PeriodCard';
 import DatePickerPopover from './components/DatePickerPopover';
 import InsightsPanel from './features/insights/InsightsPanel';
 import TourOverlay from './features/tour/TourOverlay';
-import LaneToggle from './features/comparison/LaneToggle';
 import PanelRouter from './components/PanelRouter';
 import OnboardingOverlay, { triggerOnboarding, ShowMeAroundButton } from './features/onboarding/OnboardingOverlay';
 import CursorOverlay from './features/collaboration/CursorOverlay';
@@ -44,11 +43,7 @@ export default function App() {
   const showGlobe = useUIStore(s => s.showGlobe);
   const toggleGlobe = useUIStore(s => s.toggleGlobe);
   const lanesEnabled = useUIStore(s => s.lanesEnabled);
-  const toggleLanes = useUIStore(s => s.toggleLanes);
   const activeLanes = useUIStore(s => s.activeLanes);
-  const toggleLane = useUIStore(s => s.toggleLane);
-  const activeLens = useUIStore(s => s.activeLens);
-  const setActiveLens = useUIStore(s => s.setActiveLens);
   const setChatInitMsg = useUIStore(s => s.setChatInitMsg);
 
   const tourStops = useTourStore(s => s.stops);
@@ -174,17 +169,10 @@ export default function App() {
         onOpenPalette={() => setPaletteOpen(true)}
       />
 
-      {/* Lane toggle still lives at the right edge for now — will be folded
-          into the palette / a left-rail in a follow-up. */}
-      <LaneToggle
-        lanesEnabled={lanesEnabled}
-        onToggle={toggleLanes}
-        activeLanes={activeLanes}
-        onToggleLane={toggleLane}
-        onOpenComparison={() => openPanel('comparison')}
-      />
-
-      <ScrollHint />
+      {/* Lane toggle and scroll hint were removed from the canvas. Lane
+          filtering is reachable from the command palette ("Compare regions",
+          "Apply a lens"); the scroll-to-zoom affordance lives in the help
+          overlay now. */}
 
       {/* Event card */}
       {selectedEvent && (
@@ -236,24 +224,9 @@ export default function App() {
           />
         </Suspense>
       )}
-      {!showGlobe && (
-        <button className="globe-toggle" onClick={toggleGlobe} title="Show globe">🌍</button>
-      )}
-
-      {/* Active lens banner */}
-      {activeLens && (
-        <div style={{
-          position: 'absolute', top: 50, left: '50%', transform: 'translateX(-50%)',
-          background: `linear-gradient(90deg, ${activeLens.color}20, ${activeLens.color}10)`,
-          border: `1px solid ${activeLens.color}30`, borderRadius: 12,
-          padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8,
-          zIndex: 20, backdropFilter: 'blur(10px)',
-        }}>
-          <span>{activeLens.emoji}</span>
-          <span style={{ color: activeLens.color, fontSize: 12, fontWeight: 600 }}>{activeLens.name}</span>
-          <button onClick={() => setActiveLens(null)} style={{ background: 'none', border: 'none', color: '#ffffff40', cursor: 'pointer', fontSize: 14 }}>✕</button>
-        </div>
-      )}
+      {/* The globe-toggle floating button and the active-lens banner were
+          removed: both actions are now reachable from the command palette,
+          and the active lens shows up muted in the editorial header. */}
 
       {/* Cursor overlay for collaboration */}
       <CursorOverlay />
@@ -302,14 +275,3 @@ export default function App() {
   );
 }
 
-function ScrollHint() {
-  const [visible, setVisible] = useState(true);
-  useEffect(() => { const t = setTimeout(() => setVisible(false), 5000); return () => clearTimeout(t); }, []);
-  if (!visible) return null;
-  return (
-    <div className="scroll-hint">
-      <div>Scroll to zoom · Drag to pan · Click events to explore</div>
-      <div className="scroll-hint-arrow">↕</div>
-    </div>
-  );
-}
