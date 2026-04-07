@@ -114,11 +114,36 @@ function parseYearInput(raw: string): number | null {
 }
 
 /**
+ * Pick a viewport span that puts the target year inside a context window
+ * proportional to how-far-ago it is. The earlier code preserved the user's
+ * current span verbatim, which silently broke jumps from a 14-billion-year
+ * cosmic view to a year like 1453: the clamp inside the viewport (the right
+ * edge can't exceed `nowYear()`) snapped the centre back to ~-7 Gyr because
+ * `1453 + 14e9/2 \u226b nowYear()`.
+ *
+ * The buckets here are picked so each tier shows enough surrounding history
+ * to be useful but doesn't dissolve the target year into a smear. They line
+ * up with the spans the preset jumps already use.
+ */
+function pickSpanForYear(target: number): number {
+  const yearsAgo = Math.max(1, nowYear() - target);
+  if (yearsAgo < 50)        return 30;          // last few decades
+  if (yearsAgo < 500)       return 200;         // century
+  if (yearsAgo < 5_000)     return 1_500;       // recorded history
+  if (yearsAgo < 50_000)    return 20_000;      // late prehistory
+  if (yearsAgo < 1_000_000) return 500_000;     // human evolution
+  if (yearsAgo < 100e6)     return 20e6;        // mammals / cenozoic
+  if (yearsAgo < 1e9)       return 200e6;       // phanerozoic
+  return 2e9;                                    // deep cosmic
+}
+
+/**
  * Floating popover that lets the user type a date/era OR pick from a preset
  * list. Positioned relative to the zoom badge in the top-right.
  *
- * Typing a raw year jumps without changing span. Selecting a preset both
- * jumps and sets an appropriate span.
+ * Typing a raw year jumps to a span chosen by `pickSpanForYear` based on
+ * the target year's distance from now. Selecting a preset uses that
+ * preset's hand-picked span.
  */
 export default function DatePickerPopover({ viewport, onNavigate, onClose }: Props) {
   const [query, setQuery] = useState('');
@@ -161,9 +186,11 @@ export default function DatePickerPopover({ viewport, onNavigate, onClose }: Pro
       setError("Couldn't parse that. Try '1969', '500 BCE', '65 mya', or pick a preset.");
       return;
     }
-    // When jumping via typed input we preserve the current span so the user
-    // stays at the same zoom level — they're just moving sideways in time.
-    onNavigate(parsed, viewport.span);
+    // Pick a span proportional to how-far-ago the target is. We deliberately
+    // do NOT preserve viewport.span: a 14-billion-year span centred on 1453
+    // would have its right edge at year ~7e9, which is past nowYear(), and
+    // the viewport clamp would silently snap us back to deep cosmic time.
+    onNavigate(parsed, pickSpanForYear(parsed));
     onClose();
   };
 

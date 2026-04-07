@@ -71,87 +71,104 @@ export default function PeriodCard({
           left: '50%',
           top: '50%',
           transform: 'translate(-50%, -50%)',
-          width: 'min(440px, 92vw)',
-          maxHeight: '78vh',
+          width: 'min(480px, 92vw)',
+          maxHeight: '80vh',
           overflow: 'auto',
-          background: 'rgba(13,17,23,0.96)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 18,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(20px)',
-          color: '#fff',
+          background: 'rgba(10,14,26,0.96)',
+          border: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+          borderRadius: 2,
+          boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          color: 'var(--paper, #f5f1e8)',
+          fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
           zIndex: 41,
-          padding: '20px 22px 18px',
+          padding: '24px 28px 22px',
         }}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-          <div style={{
-            width: 8,
-            height: 56,
-            borderRadius: 4,
-            background: era.accent,
-            flexShrink: 0,
-            marginTop: 2,
-          }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: 1.2,
-              color: era.accent,
-              textTransform: 'uppercase',
-              marginBottom: 4,
-            }}>
-              {era.label} · {scale}
-            </div>
-            <h2 style={{
-              fontSize: 22,
-              fontWeight: 700,
-              margin: 0,
-              lineHeight: 1.2,
-            }}>
-              {periodLabel}
-            </h2>
-            <div style={{ fontSize: 12, color: '#ffffff70', marginTop: 4 }}>
-              Showing context for {windowLabel}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#ffffff70',
-              fontSize: 22,
-              cursor: 'pointer',
-              padding: 0,
-              width: 28,
-              height: 28,
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            position: 'absolute',
+            top: 14,
+            right: 14,
+            background: 'transparent',
+            border: '1px solid var(--hairline, rgba(255,255,255,0.12))',
+            color: 'var(--paper-mute, #ffffff80)',
+            fontSize: 14,
+            cursor: 'pointer',
+            borderRadius: 2,
+            width: 28,
+            height: 28,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--font-display, Fraunces, serif)',
+          }}
+        >
+          &times;
+        </button>
+
+        {/* Eyebrow */}
+        <div style={{
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '0.18em',
+          marginBottom: 10,
+          color: 'var(--paper-ghost, #ffffff45)',
+          textTransform: 'uppercase',
+        }}>
+          {era.label} &middot; {scale}
+        </div>
+
+        {/* Headline */}
+        <h2 style={{
+          fontSize: 36,
+          fontWeight: 500,
+          margin: '0 0 4px',
+          lineHeight: 1.05,
+          letterSpacing: '-0.005em',
+          color: 'var(--paper, #f5f1e8)',
+        }}>
+          {periodLabel}
+        </h2>
+
+        <div style={{
+          fontStyle: 'italic',
+          fontSize: 14,
+          color: 'var(--paper-mute, #ffffff70)',
+          marginBottom: 22,
+        }}>
+          Showing context for {windowLabel}
         </div>
 
         {/* Nearby events */}
-        <div style={{ marginBottom: 16 }}>
+        <div style={{
+          marginBottom: 18,
+          borderTop: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+          paddingTop: 14,
+        }}>
           <div style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: '#ffffff60',
-            letterSpacing: 0.8,
+            fontSize: 10,
+            fontWeight: 500,
+            color: 'var(--paper-ghost, #ffffff45)',
+            letterSpacing: '0.18em',
             textTransform: 'uppercase',
-            marginBottom: 8,
+            marginBottom: 10,
           }}>
             {nearby.length > 0 ? 'Nearest events' : 'No anchor events in this window'}
           </div>
           {nearby.length === 0 && (
-            <div style={{ fontSize: 13, color: '#ffffff80', lineHeight: 1.5 }}>
-              Zoom in to load discovered events for this period, or ask the guide
-              what was happening in {periodLabel.toLowerCase()}.
+            <div style={{
+              fontSize: 14,
+              fontStyle: 'italic',
+              color: 'var(--paper-mute, #ffffff80)',
+              lineHeight: 1.55,
+            }}>
+              Zoom in to load discovered events for this period, or ask the
+              guide what was happening in {periodLabel.toLowerCase()}.
             </div>
           )}
           {nearby.map(ev => {
@@ -163,28 +180,31 @@ export default function PeriodCard({
                 onClick={() => onSelectEvent(ev)}
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
+                  alignItems: 'baseline',
+                  gap: 12,
                   width: '100%',
-                  padding: '10px 12px',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  borderRadius: 10,
-                  marginBottom: 6,
-                  color: '#fff',
-                  fontSize: 13,
+                  padding: '8px 0',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: '1px solid var(--hairline, rgba(255,255,255,0.06))',
+                  color: 'var(--paper, #f5f1e8)',
+                  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+                  fontSize: 16,
                   textAlign: 'left',
                   cursor: 'pointer',
-                  transition: 'background 0.15s',
+                  transition: 'color 0.15s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.09)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#ffffff'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--paper, #f5f1e8)'; }}
               >
-                <span style={{ fontSize: 18 }}>{ev.emoji}</span>
-                <span style={{ flex: 1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {ev.title}
                 </span>
-                <span style={{ fontSize: 11, color: '#ffffff60', fontFamily: 'monospace' }}>
+                <span style={{
+                  fontStyle: 'italic',
+                  fontSize: 12,
+                  color: 'var(--paper-ghost, #ffffff50)',
+                }}>
                   {deltaLabel}
                 </span>
               </button>
@@ -193,22 +213,23 @@ export default function PeriodCard({
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{
+          display: 'flex',
+          gap: 22,
+          paddingTop: 14,
+          borderTop: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+        }}>
           <button
             onClick={() => onZoomIn(year, viewportSpan / 8)}
-            style={primaryBtn}
-            onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.15)'; }}
-            onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
+            style={periodActionBtn}
           >
-            Zoom into this period
+            Zoom into this period &rarr;
           </button>
           <button
             onClick={() => onAskGuide(`Tell me what was happening around ${periodLabel}. What were the major events, daily life, and turning points? What's worth knowing about this moment in history?`)}
-            style={secondaryBtn}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+            style={periodActionBtn}
           >
-            Ask the guide about {periodLabel}
+            Ask the guide
           </button>
         </div>
       </div>
@@ -216,28 +237,16 @@ export default function PeriodCard({
   );
 }
 
-const primaryBtn: React.CSSProperties = {
-  padding: '11px 16px',
-  background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+const periodActionBtn: React.CSSProperties = {
+  padding: 0,
+  background: 'transparent',
   border: 'none',
-  borderRadius: 10,
-  color: '#fff',
+  color: 'var(--paper-mute, #ffffff90)',
+  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+  fontStyle: 'italic',
   fontSize: 13,
-  fontWeight: 600,
+  letterSpacing: '0.01em',
   cursor: 'pointer',
-  transition: 'filter 0.15s',
-};
-
-const secondaryBtn: React.CSSProperties = {
-  padding: '11px 16px',
-  background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: 10,
-  color: '#ffffffcc',
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: 'pointer',
-  transition: 'background 0.15s',
 };
 
 /** Format the half-window into a friendly "the surrounding X" string. */

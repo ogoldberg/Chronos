@@ -188,7 +188,15 @@ export default function App() {
       {datePickerOpen && (
         <DatePickerPopover
           viewport={viewport}
-          onNavigate={(y, s) => animateTo(y, s)}
+          onNavigate={(y, s) => {
+            // Navigate to the chosen year, then immediately open a period
+            // card so the user gets context for *where* they just landed
+            // (otherwise jumping to e.g. 1453 would just leave them
+            // staring at an empty timeline if no events sit at exactly
+            // that year).
+            animateTo(y, s);
+            setSelectedPeriod({ year: y, span: s });
+          }}
           onClose={() => setDatePickerOpen(false)}
         />
       )}
