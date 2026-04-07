@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Viewport, TimelineEvent } from '../../types';
 import { formatYear, formatYearShort } from '../../utils/format';
-import { yearToPixel } from '../../canvas/viewport';
+import { yearToPixel, isEventVisible } from '../../canvas/viewport';
 import { REGION_LANES, matchEventToRegion } from '../../data/regions';
 import { speak, stopSpeech, isSpeaking } from '../../utils/speech';
 
@@ -154,11 +154,9 @@ export default function ComparisonView({ viewport, events, onClose, onSelectEven
       ctx.stroke();
 
       // Events in this region
-      const regionEvents = events.filter(ev => {
-        if (ev.year < left || ev.year > right) return false;
-        if (ev.maxSpan && viewport.span > ev.maxSpan) return false;
-        return matchEventToRegion(ev.lat, ev.lng) === regionId;
-      });
+      const regionEvents = events.filter(ev =>
+        isEventVisible(ev, viewport) && matchEventToRegion(ev.lat, ev.lng) === regionId
+      );
 
       let prevX = -100;
       for (const ev of regionEvents.slice(0, 30)) {

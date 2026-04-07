@@ -455,12 +455,19 @@ export default function OnboardingOverlay() {
   return (
     <>
       <SpotlightOverlay rect={targetRect} />
-      {/* Click catcher */}
+      {/*
+        Click catcher: dismisses the tutorial when the user clicks anywhere
+        outside the tooltip. Previously this was a no-op div that just called
+        stopPropagation, which made the entire page unclickable for the
+        duration of the tutorial.
+      */}
       <div
-        style={{ position: 'fixed', inset: 0, zIndex: 10000 }}
-        onClick={(e) => e.stopPropagation()}
+        style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'transparent' }}
+        onClick={complete}
+        data-testid="onboarding-click-catcher"
       />
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           ...tooltipCardStyle,
           ...pos,

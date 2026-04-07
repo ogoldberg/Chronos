@@ -19,6 +19,10 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [sources, setSources] = useState<SourceDocument[]>([]);
   const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null);
   const [verifiedCitations, setVerifiedCitations] = useState<Citation[]>([]);
+  // Wikipedia section expanded state. When collapsed we clamp the extract
+  // at ~120px with a fade mask; when expanded the full article text flows
+  // inline and the card itself scrolls to accommodate it.
+  const [wikiExpanded, setWikiExpanded] = useState(false);
 
   useEffect(() => {
     if (event.wiki) {
@@ -272,26 +276,72 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
             marginBottom: 16,
           }}>
             <div style={{
-              fontSize: 10,
-              color: '#ffffff50',
-              fontWeight: 600,
-              letterSpacing: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               marginBottom: 8,
             }}>
-              WIKIPEDIA
+              <div style={{
+                fontSize: 10,
+                color: '#ffffff50',
+                fontWeight: 600,
+                letterSpacing: 1,
+              }}>
+                WIKIPEDIA
+              </div>
+              <button
+                onClick={() => setWikiExpanded(v => !v)}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 6,
+                  color: '#ffffffa0',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  padding: '3px 10px',
+                  cursor: 'pointer',
+                  letterSpacing: 0.5,
+                }}
+              >
+                {wikiExpanded ? 'COLLAPSE' : 'EXPAND'}
+              </button>
             </div>
-            <p style={{
-              color: '#ffffffaa',
-              fontSize: 13,
-              lineHeight: 1.5,
-              margin: 0,
-              maxHeight: 120,
-              overflow: 'hidden',
-              maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
-            }}>
-              {wiki.extract}
-            </p>
+            {/*
+              Collapsed: clamped height with a gradient fade so users can
+              tell there's more. Clicking the collapsed text also expands it
+              (not just the explicit button), making it feel like a single
+              accordion target.
+
+              Expanded: full article text flows inline. We cap at 60vh and
+              scroll internally so very long extracts don't push the rest of
+              the event card off-screen.
+            */}
+            <div
+              onClick={() => { if (!wikiExpanded) setWikiExpanded(true); }}
+              style={{
+                cursor: wikiExpanded ? 'default' : 'pointer',
+              }}
+            >
+              <p style={{
+                color: '#ffffffcc',
+                fontSize: 13,
+                lineHeight: 1.55,
+                margin: 0,
+                maxHeight: wikiExpanded ? '60vh' : 120,
+                overflowY: wikiExpanded ? 'auto' : 'hidden',
+                overflowX: 'hidden',
+                whiteSpace: 'pre-wrap',
+                maskImage: wikiExpanded
+                  ? 'none'
+                  : 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                WebkitMaskImage: wikiExpanded
+                  ? 'none'
+                  : 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                transition: 'max-height 0.25s ease',
+              }}>
+                {wiki.extract}
+              </p>
+            </div>
           </div>
         )}
 

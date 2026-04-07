@@ -1,7 +1,7 @@
 import type { TimelineEvent, Viewport } from '../types';
 import { getEra, ERAS } from '../data/eras';
 import { formatYear, formatYearShort } from '../utils/format';
-import { yearToPixel } from './viewport';
+import { yearToPixel, isEventVisible } from './viewport';
 import { REGION_LANES, matchEventToRegion } from '../data/regions';
 
 const TICK_STEPS = [
@@ -142,11 +142,7 @@ export function renderTimeline(
   }
 
   // Filter visible events
-  const visible = events.filter(ev => {
-    if (ev.year < left || ev.year > right) return false;
-    if (ev.maxSpan && vp.span > ev.maxSpan) return false;
-    return true;
-  });
+  const visible = events.filter(ev => isEventVisible(ev, vp));
 
   // Lane mode: draw region bands
   const lanesActive = activeLanes && activeLanes.size > 0;
@@ -498,15 +494,10 @@ export function renderTimeline(
     }
   }
 
-  // Current view label (top left)
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.font = 'bold 14px -apple-system, sans-serif';
-  ctx.fillStyle = era.accent + 'cc';
-  ctx.fillText(era.label.toUpperCase(), 20, 20);
-  ctx.font = '12px "SF Mono", monospace';
-  ctx.fillStyle = '#ffffff80';
-  ctx.fillText(`${formatYear(left)}  →  ${formatYear(right)}`, 20, 40);
+  // (The era label + year range that used to be painted here lived under
+  // the editorial header in the redesign and was always doubled-up. The
+  // header surfaces both pieces of information typographically, so we
+  // skip the on-canvas overlay entirely.)
 
   return hitTargets;
 }

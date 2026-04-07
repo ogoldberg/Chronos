@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import type { TimelineEvent, Viewport } from '../types';
-import { zoomAtCursor, pan } from './viewport';
+import { zoomAtCursor, pan, pixelToYear } from './viewport';
 import { renderTimeline, type HitTarget } from './renderer';
 
 interface Props {
@@ -11,6 +11,9 @@ interface Props {
   onViewportChange: (vp: Viewport) => void;
   onSelectEvent: (ev: TimelineEvent | null) => void;
   onHoverEvent: (ev: TimelineEvent | null) => void;
+  // Fired when the user clicks empty space on the timeline (i.e. not on an
+  // event or cluster). Used to surface a "what was happening here" period card.
+  onSelectPeriod?: (year: number) => void;
 }
 
 export default function TimelineCanvas({
@@ -21,13 +24,21 @@ export default function TimelineCanvas({
   onViewportChange,
   onSelectEvent,
   onHoverEvent,
+  onSelectPeriod,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 1200, h: 700 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hitTargetsRef = useRef<HitTarget[]>([]);
-  const dragRef = useRef({ active: false, startX: 0 });
+  // Drag state. `startX` tracks the last pointer position and is advanced on
+  // every pan step so we can compute the incremental delta. `totalMoved`
+  // accumulates the absolute distance moved since mousedown — this is what
+  // we consult on mouseup to decide whether the gesture was a click or a
+  // drag. We can't use `clientX - startX` on mouseup because startX has
+  // already been advanced to the current cursor, making the delta zero
+  // even after a long drag.
+  const dragRef = useRef({ active: false, startX: 0, totalMoved: 0 });
   const pinchRef = useRef({ active: false, dist0: 0, span0: 0 });
 
   // Resize observer
@@ -84,7 +95,7 @@ export default function TimelineCanvas({
   // Mouse drag
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    dragRef.current = { active: true, startX: e.clientX };
+    dragRef.current = { active: true, startX: e.clientX, totalMoved: 0 };
   }, []);
 
   const onMouseMove = useCallback(
@@ -115,6 +126,7 @@ export default function TimelineCanvas({
         if (Math.abs(dx) > 1) {
           onViewportChange(pan(viewport, dx, dims.w));
           dragRef.current.startX = e.clientX;
+          dragRef.current.totalMoved += Math.abs(dx);
         }
       }
     },
@@ -124,7 +136,7 @@ export default function TimelineCanvas({
   const onMouseUp = useCallback(
     (e: React.MouseEvent) => {
       if (!dragRef.current.active) return;
-      const moved = Math.abs(e.clientX - dragRef.current.startX);
+      const moved = dragRef.current.totalMoved;
       dragRef.current.active = false;
 
       // If barely moved, treat as click
@@ -153,19 +165,25 @@ export default function TimelineCanvas({
             centerYear: center,
             span: Math.max(range * 2, viewport.span / 4),
           });
+        } else if (found?.event) {
+          onSelectEvent(found.event);
+        } else if (onSelectPeriod) {
+          // Empty-canvas click: open the "period card" for the moment they clicked.
+          const year = pixelToYear(mx, viewport, dims.w);
+          onSelectPeriod(year);
         } else {
-          onSelectEvent(found?.event ?? null);
+          onSelectEvent(null);
         }
       }
     },
-    [onSelectEvent, onViewportChange, viewport]
+    [onSelectEvent, onSelectPeriod, onViewportChange, viewport, dims.w]
   );
 
   // Touch handlers for mobile
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
       if (e.touches.length === 1) {
-        dragRef.current = { active: true, startX: e.touches[0].clientX };
+        dragRef.current = { active: true, startX: e.touches[0].clientX, totalMoved: 0 };
       } else if (e.touches.length === 2) {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -194,6 +212,7 @@ export default function TimelineCanvas({
         if (Math.abs(dx) > 1) {
           onViewportChange(pan(viewport, dx, dims.w));
           dragRef.current.startX = e.touches[0].clientX;
+          dragRef.current.totalMoved += Math.abs(dx);
         }
       }
     },

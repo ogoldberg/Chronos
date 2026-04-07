@@ -3,8 +3,21 @@ import type { TimelineEvent, Viewport } from '../types';
 import { ANCHOR_EVENTS } from '../data/anchorEvents';
 import { clamp } from '../utils/format';
 import { readURLState } from '../utils/urlState';
+import { nowYear, clampViewport } from '../canvas/viewport';
 
 const urlState = readURLState();
+
+// Default "zoom all the way out" viewport: from the Big Bang (13.8 Ga)
+// to the present, centered so both ends are comfortably visible. Span is
+// slightly larger than 13.8 Ga to give a bit of padding on each side.
+// Computed as a function of the current clock so a very long-lived build
+// that persists past year boundaries still centers on the right place.
+function defaultViewport(): Viewport {
+  return clampViewport({
+    centerYear: (nowYear() + -13.8e9) / 2,
+    span: 14e9,
+  });
+}
 
 interface TimelineState {
   // Viewport
@@ -21,6 +34,11 @@ interface TimelineState {
   hoveredEvent: TimelineEvent | null;
   setHoveredEvent: (ev: TimelineEvent | null) => void;
 
+  // Period selection: a year + span describing a "moment in time the user
+  // clicked on the timeline ruler" — independent of any specific event.
+  selectedPeriod: { year: number; span: number } | null;
+  setSelectedPeriod: (p: { year: number; span: number } | null) => void;
+
   // Discovery
   discovering: boolean;
   setDiscovering: (d: boolean) => void;
@@ -29,7 +47,7 @@ interface TimelineState {
 }
 
 export const useTimelineStore = create<TimelineState>((set, get) => ({
-  viewport: urlState.viewport || { centerYear: -4e9, span: 2.8e10 },
+  viewport: urlState.viewport ? clampViewport(urlState.viewport) : defaultViewport(),
   setViewport: (vp) => {
     if (typeof vp === 'function') {
       set(state => ({ viewport: vp(state.viewport) }));
@@ -60,9 +78,12 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   }),
 
   selectedEvent: null,
-  setSelectedEvent: (ev) => set({ selectedEvent: ev }),
+  setSelectedEvent: (ev) => set({ selectedEvent: ev, selectedPeriod: ev ? null : get().selectedPeriod }),
   hoveredEvent: null,
   setHoveredEvent: (ev) => set({ hoveredEvent: ev }),
+
+  selectedPeriod: null,
+  setSelectedPeriod: (p) => set({ selectedPeriod: p, selectedEvent: p ? null : get().selectedEvent }),
 
   discovering: false,
   setDiscovering: (d) => set({ discovering: d }),
@@ -71,7 +92,12 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 }));
 
 // Derived: all events (anchors + dynamic, deduplicated)
+// Cached by dynamicEvents reference so the snapshot is stable for
+// useSyncExternalStore-based subscribers (zustand v5).
+const allEventsCache = new WeakMap<TimelineEvent[], TimelineEvent[]>();
 export function getAllEvents(state: TimelineState): TimelineEvent[] {
+  const cached = allEventsCache.get(state.dynamicEvents);
+  if (cached) return cached;
   const seen = new Set<string>();
   const result: TimelineEvent[] = [];
   for (const ev of ANCHOR_EVENTS) {
@@ -80,5 +106,6 @@ export function getAllEvents(state: TimelineState): TimelineEvent[] {
   for (const ev of state.dynamicEvents) {
     if (!seen.has(ev.title)) { seen.add(ev.title); result.push(ev); }
   }
+  allEventsCache.set(state.dynamicEvents, result);
   return result;
 }

@@ -1,7 +1,5 @@
 import { useCallback, useRef, useEffect, useMemo, Suspense, lazy, useState } from 'react';
-import { ANCHOR_EVENTS } from './data/anchorEvents';
-import { clamp, formatYearShort, scaleLabel } from './utils/format';
-import { getVisibleRange } from './canvas/viewport';
+import { isEventVisible, clampViewport } from './canvas/viewport';
 import { discoverEvents, getCacheStats } from './features/discovery/eventDiscovery';
 import { writeURLState } from './utils/urlState';
 import { recordEventView } from './features/gamification/gamification';
@@ -9,14 +7,15 @@ import { useTimelineStore, getAllEvents } from './stores/timelineStore';
 import { useUIStore } from './stores/uiStore';
 import { useTourStore } from './stores/tourStore';
 import TimelineCanvas from './canvas/TimelineCanvas';
-import EraChips from './components/EraChips';
+import EditorialHeader from './components/EditorialHeader';
+import CommandPalette from './components/CommandPalette';
 import EventCard from './features/events/EventCard';
+import PeriodCard from './features/period/PeriodCard';
+import DatePickerPopover from './components/DatePickerPopover';
 import InsightsPanel from './features/insights/InsightsPanel';
 import TourOverlay from './features/tour/TourOverlay';
 import LaneToggle from './features/comparison/LaneToggle';
 import PanelRouter from './components/PanelRouter';
-import StatsBar from './features/gamification/StatsBar';
-import AchievementToast from './features/gamification/AchievementToast';
 import OnboardingOverlay, { triggerOnboarding, ShowMeAroundButton } from './features/onboarding/OnboardingOverlay';
 import CursorOverlay from './features/collaboration/CursorOverlay';
 import type { TimelineEvent } from './types';
@@ -30,20 +29,18 @@ export default function App() {
   const setViewport = useTimelineStore(s => s.setViewport);
   const selectedEvent = useTimelineStore(s => s.selectedEvent);
   const setSelectedEvent = useTimelineStore(s => s.setSelectedEvent);
+  const selectedPeriod = useTimelineStore(s => s.selectedPeriod);
+  const setSelectedPeriod = useTimelineStore(s => s.setSelectedPeriod);
   const hoveredEvent = useTimelineStore(s => s.hoveredEvent);
   const setHoveredEvent = useTimelineStore(s => s.setHoveredEvent);
   const addEvents = useTimelineStore(s => s.addEvents);
   const setDiscovering = useTimelineStore(s => s.setDiscovering);
   const setCacheStats = useTimelineStore(s => s.setCacheStats);
-  const discovering = useTimelineStore(s => s.discovering);
-  const cacheStats = useTimelineStore(s => s.cacheStats);
   const allEvents = useTimelineStore(getAllEvents);
 
   const activePanel = useUIStore(s => s.activePanel);
   const openPanel = useUIStore(s => s.openPanel);
   const closePanel = useUIStore(s => s.closePanel);
-  const voice = useUIStore(s => s.voice);
-  const toggleVoice = useUIStore(s => s.toggleVoice);
   const showGlobe = useUIStore(s => s.showGlobe);
   const toggleGlobe = useUIStore(s => s.toggleGlobe);
   const lanesEnabled = useUIStore(s => s.lanesEnabled);
@@ -60,16 +57,18 @@ export default function App() {
   const discoverTimerRef = useRef<number>(0);
   const urlTimerRef = useRef<number>(0);
   const existingTitlesRef = useRef<Set<string>>(new Set());
+  // Whether the date/period picker popover is open. Triggered by clicking
+  // the era/year text in the editorial header.
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  // Whether the ⌘K command palette is open. Triggered by ⌘K, the header
+  // Search button, or the legacy '/' shortcut.
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Visible events
-  const visibleEvents = useMemo(() => {
-    const [left, right] = getVisibleRange(viewport);
-    return allEvents.filter(ev => {
-      if (ev.year < left || ev.year > right) return false;
-      if (ev.maxSpan && viewport.span > ev.maxSpan) return false;
-      return true;
-    });
-  }, [allEvents, viewport]);
+  const visibleEvents = useMemo(
+    () => allEvents.filter(ev => isEventVisible(ev, viewport)),
+    [allEvents, viewport],
+  );
 
   // Animated navigation
   const animateTo = useCallback((targetYear: number, targetSpan: number, duration = 1500) => {
@@ -80,10 +79,10 @@ export default function App() {
     function step(now: number) {
       const t = Math.min((now - t0) / duration, 1);
       const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-      setViewport({
-        centerYear: clamp(startYear + (targetYear - startYear) * ease, -14e9, 2030),
-        span: clamp(startSpan + (targetSpan - startSpan) * ease, 0.5, 3e10),
-      });
+      setViewport(clampViewport({
+        centerYear: startYear + (targetYear - startYear) * ease,
+        span: startSpan + (targetSpan - startSpan) * ease,
+      }));
       if (t < 1) animRef.current = requestAnimationFrame(step);
       else animRef.current = 0;
     }
@@ -130,47 +129,25 @@ export default function App() {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
       switch (e.key) {
-        case 'ArrowLeft': e.preventDefault(); setViewport(prev => ({ centerYear: clamp(prev.centerYear - prev.span * 0.1, -14e9, 2030), span: prev.span })); break;
-        case 'ArrowRight': e.preventDefault(); setViewport(prev => ({ centerYear: clamp(prev.centerYear + prev.span * 0.1, -14e9, 2030), span: prev.span })); break;
-        case 'ArrowUp': case '+': case '=': e.preventDefault(); setViewport(prev => ({ centerYear: prev.centerYear, span: clamp(prev.span / 1.3, 0.5, 3e10) })); break;
-        case 'ArrowDown': case '-': e.preventDefault(); setViewport(prev => ({ centerYear: prev.centerYear, span: clamp(prev.span * 1.3, 0.5, 3e10) })); break;
-        case 'Escape': e.preventDefault(); setSelectedEvent(null); closePanel(); break;
+        case 'ArrowLeft': e.preventDefault(); setViewport(prev => clampViewport({ centerYear: prev.centerYear - prev.span * 0.1, span: prev.span })); break;
+        case 'ArrowRight': e.preventDefault(); setViewport(prev => clampViewport({ centerYear: prev.centerYear + prev.span * 0.1, span: prev.span })); break;
+        case 'ArrowUp': case '+': case '=': e.preventDefault(); setViewport(prev => clampViewport({ centerYear: prev.centerYear, span: prev.span / 1.3 })); break;
+        case 'ArrowDown': case '-': e.preventDefault(); setViewport(prev => clampViewport({ centerYear: prev.centerYear, span: prev.span * 1.3 })); break;
+        case 'Escape': e.preventDefault(); setSelectedEvent(null); setSelectedPeriod(null); closePanel(); break;
         case '?': e.preventDefault(); openPanel(activePanel === 'help' ? null : 'help'); break;
-        case 'k': if (e.ctrlKey || e.metaKey) { e.preventDefault(); openPanel('search'); } break;
-        case '/': if (!e.ctrlKey) { e.preventDefault(); openPanel('search'); } break;
+        case 'k': if (e.ctrlKey || e.metaKey) { e.preventDefault(); setPaletteOpen(true); } break;
+        case '/': if (!e.ctrlKey) { e.preventDefault(); setPaletteOpen(true); } break;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setViewport, setSelectedEvent, closePanel, openPanel, activePanel]);
+  }, [setViewport, setSelectedEvent, setSelectedPeriod, closePanel, openPanel, activePanel]);
 
   // Track event views
   const handleSelectEvent = useCallback((ev: TimelineEvent | null) => {
     setSelectedEvent(ev);
     if (ev) recordEventView();
   }, [setSelectedEvent]);
-
-  // Toolbar button helper
-  const toolBtn = (label: string, panel: NonNullable<typeof activePanel>) => (
-    <button
-      key={panel}
-      onClick={() => openPanel(panel)}
-      style={{
-        background: 'rgba(13, 17, 23, 0.9)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: 14,
-        padding: '6px 14px',
-        color: '#ffffff80',
-        fontSize: 11,
-        fontWeight: 600,
-        cursor: 'pointer',
-        backdropFilter: 'blur(10px)',
-        whiteSpace: 'nowrap' as const,
-      }}
-    >
-      {label}
-    </button>
-  );
 
   return (
     <div className="chronos-root">
@@ -182,10 +159,23 @@ export default function App() {
         onViewportChange={setViewport}
         onSelectEvent={handleSelectEvent}
         onHoverEvent={setHoveredEvent}
+        onSelectPeriod={(year) => setSelectedPeriod({ year, span: viewport.span })}
       />
 
-      <EraChips viewport={viewport} onNavigate={(y, s) => animateTo(y, s)} />
+      {/*
+        Editorial header — the only chrome pinned to the top of the canvas.
+        Wordmark, era/year indicator, and the ⌘K affordance. The era chip
+        row and the 27-button bottom toolbar from the previous design are
+        gone; everything they exposed lives in the command palette now.
+      */}
+      <EditorialHeader
+        viewport={viewport}
+        onOpenDatePicker={() => setDatePickerOpen(true)}
+        onOpenPalette={() => setPaletteOpen(true)}
+      />
 
+      {/* Lane toggle still lives at the right edge for now — will be folded
+          into the palette / a left-rail in a follow-up. */}
       <LaneToggle
         lanesEnabled={lanesEnabled}
         onToggle={toggleLanes}
@@ -193,16 +183,6 @@ export default function App() {
         onToggleLane={toggleLane}
         onOpenComparison={() => openPanel('comparison')}
       />
-
-      {/* Top right controls */}
-      <div className="top-right-controls">
-        {discovering && <span className="discover-badge">Discovering...</span>}
-        <span className="zoom-badge">{scaleLabel(viewport.span)} · {formatYearShort(viewport.centerYear)}</span>
-        <span className="cache-badge">{cacheStats.cells} regions · {cacheStats.events + ANCHOR_EVENTS.length} events</span>
-        <button className={`voice-btn ${voice ? 'active' : ''}`} onClick={toggleVoice}>
-          {voice ? '🔊' : '🔇'}
-        </button>
-      </div>
 
       <ScrollHint />
 
@@ -218,6 +198,28 @@ export default function App() {
         </>
       )}
 
+      {/* Date/period picker — triggered by clicking the zoom badge */}
+      {datePickerOpen && (
+        <DatePickerPopover
+          viewport={viewport}
+          onNavigate={(y, s) => animateTo(y, s)}
+          onClose={() => setDatePickerOpen(false)}
+        />
+      )}
+
+      {/* Period card — opens when the user clicks an empty point on the timeline */}
+      {selectedPeriod && (
+        <PeriodCard
+          year={selectedPeriod.year}
+          viewportSpan={selectedPeriod.span}
+          allEvents={allEvents}
+          onClose={() => setSelectedPeriod(null)}
+          onZoomIn={(y, s) => { setSelectedPeriod(null); animateTo(y, s); }}
+          onSelectEvent={(ev) => { setSelectedPeriod(null); handleSelectEvent(ev); }}
+          onAskGuide={(q) => { setSelectedPeriod(null); setChatInitMsg(q); openPanel('chat'); }}
+        />
+      )}
+
       <InsightsPanel viewport={viewport} visibleEvents={visibleEvents} />
 
       {/* Globe */}
@@ -230,6 +232,7 @@ export default function App() {
             isCosmicScale={viewport.span > 1e8}
             currentYear={viewport.centerYear}
             onClose={toggleGlobe}
+            onAskGuide={(q) => { setChatInitMsg(q); openPanel('chat'); }}
           />
         </Suspense>
       )}
@@ -271,41 +274,14 @@ export default function App() {
         />
       )}
 
-      {/* Bottom toolbar */}
-      <div style={{
-        position: 'absolute', bottom: 20, left: '50%',
-        transform: 'translateX(calc(-50% + 140px))',
-        display: 'flex', gap: 6, zIndex: 20, flexWrap: 'wrap',
-      }}>
-        {toolBtn('💬 Chat', 'chat')}
-        {toolBtn('🔗 Parallels', 'currentEvents')}
-        {toolBtn('🔍 Myths', 'myths')}
-        {toolBtn('🧠 Quiz', 'quiz')}
-        {toolBtn('🔬 Lenses', 'lenses')}
-        {toolBtn('🎓 Classroom', 'classroom')}
-        {toolBtn('👩‍🏫 Teach', 'teacher')}
-        {toolBtn('📅 My Life', 'personal')}
-        {toolBtn('🔮 What If', 'whatif')}
-        {toolBtn('⏩ Time-lapse', 'timelapse')}
-        {toolBtn('⚖️ Debate', 'debate')}
-        {toolBtn('🌐 Community', 'community')}
-        {toolBtn('🤝 Collab', 'collaboration')}
-        {toolBtn('📊 Data', 'overlays')}
-        {toolBtn('📤 Export', 'export')}
-        {toolBtn('📅 Today', 'today')}
-        {toolBtn('🕸️ Graph', 'graph')}
-        {toolBtn('🧠 Review', 'review')}
-        {toolBtn('👤 Figures', 'figures')}
-        {toolBtn('📚 Reading', 'reading')}
-        {toolBtn('📜 Sources', 'sources')}
-        {toolBtn('📍 Places', 'places')}
-        {toolBtn('🎵 Sound', 'soundtrack')}
-        {toolBtn('⚙️ Difficulty', 'difficulty')}
-        {toolBtn('👤 Account', 'auth')}
-      </div>
-
-      <StatsBar />
-      <AchievementToast />
+      {/* Command palette — replaces the 27-button bottom toolbar */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        openPanel={openPanel}
+        toggleGlobe={toggleGlobe}
+        openDatePicker={() => setDatePickerOpen(true)}
+      />
 
       {/* "Show me around" button — visible when help overlay is open */}
       {activePanel === 'help' && (

@@ -1,4 +1,5 @@
 import type { Viewport } from '../types';
+import { nowYear } from '../canvas/viewport';
 
 interface Chip {
   label: string;
@@ -18,7 +19,10 @@ const CHIPS: Chip[] = [
   { label: 'Classical', emoji: '⚔️', year: 0, span: 1500 },
   { label: 'Medieval', emoji: '🏰', year: 1000, span: 600 },
   { label: 'Modern', emoji: '🏭', year: 1800, span: 300 },
-  { label: 'Now', emoji: '📍', year: 2000, span: 50 },
+  // "Now" uses NaN as a sentinel and is resolved to the live `nowYear()`
+  // at click time (and in the active-state check below) so the chip
+  // tracks the real clock instead of whatever was "now" at module load.
+  { label: 'Now', emoji: '📍', year: NaN, span: 50 },
 ];
 
 interface Props {
@@ -41,11 +45,15 @@ export default function EraChips({ viewport, onNavigate }: Props) {
       maxWidth: '90vw',
     }}>
       {CHIPS.map(chip => {
-        const isActive = Math.abs(viewport.centerYear - chip.year) < chip.span * 0.5;
+        // Resolve the "Now" sentinel: NaN → live current year, offset so
+        // the right edge lands at today instead of half a span into the
+        // future (which the viewport would then clamp back anyway).
+        const resolvedYear = Number.isNaN(chip.year) ? nowYear() - chip.span / 2 : chip.year;
+        const isActive = Math.abs(viewport.centerYear - resolvedYear) < chip.span * 0.5;
         return (
           <button
             key={chip.label}
-            onClick={() => onNavigate(chip.year, chip.span)}
+            onClick={() => onNavigate(resolvedYear, chip.span)}
             style={{
               background: isActive ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)',
               border: `1px solid ${isActive ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,

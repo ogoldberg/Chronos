@@ -3,7 +3,7 @@ import { useUIStore, type PanelId } from '../stores/uiStore';
 import { useTimelineStore, getAllEvents } from '../stores/timelineStore';
 import { useTourStore } from '../stores/tourStore';
 import { scaleLabel } from '../utils/format';
-import { getVisibleRange } from '../canvas/viewport';
+import { isEventVisible } from '../canvas/viewport';
 
 // Lazy-loaded panels
 const ChatPanel = lazy(() => import('../features/chat/ChatPanel'));
@@ -50,12 +50,7 @@ export default function PanelRouter() {
 
   const startTour = useTourStore(s => s.startTour);
 
-  const [left, right] = getVisibleRange(viewport);
-  const visibleEvents = allEvents.filter(ev => {
-    if (ev.year < left || ev.year > right) return false;
-    if (ev.maxSpan && viewport.span > ev.maxSpan) return false;
-    return true;
-  });
+  const visibleEvents = allEvents.filter(ev => isEventVisible(ev, viewport));
 
   const animateTo = (year: number, span: number) => {
     // Simple instant navigation — animation handled by caller if needed
@@ -75,6 +70,7 @@ export default function PanelRouter() {
           onStartTour={startTour}
           onAddEvents={addEvents}
           initialMessage={chatInitMsg}
+          onClose={closePanel}
         />
       )}
       {activePanel === 'comparison' && (
