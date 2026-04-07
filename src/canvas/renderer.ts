@@ -99,46 +99,40 @@ export function renderTimeline(
     if (eraEnd < left || eraStart > right) continue;
     const x1 = Math.max(0, yearToPixel(eraStart, vp, W));
     const x2 = Math.min(W, yearToPixel(eraEnd, vp, W));
-    const bandGrad = ctx.createLinearGradient(x1, 0, x2, 0);
-    bandGrad.addColorStop(0, ERAS[i].accent + '00');
-    bandGrad.addColorStop(0.1, ERAS[i].accent + '08');
-    bandGrad.addColorStop(0.9, ERAS[i].accent + '08');
-    bandGrad.addColorStop(1, ERAS[i].accent + '00');
-    ctx.fillStyle = bandGrad;
-    ctx.fillRect(x1, timelineY - 50, x2 - x1, 100);
+    // Hairline divider between era bands instead of colored fills.
+    if (i > 0 && x1 > 4 && x1 < W - 4) {
+      ctx.strokeStyle = '#ffffff10';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x1, timelineY - 36);
+      ctx.lineTo(x1, timelineY + 36);
+      ctx.stroke();
+    }
+    void x2;
   }
 
-  // Timeline axis — triple-layer glow for depth
-  // Outer glow
-  ctx.strokeStyle = era.accent + '08';
-  ctx.lineWidth = 20;
-  ctx.beginPath();
-  ctx.moveTo(0, timelineY);
-  ctx.lineTo(W, timelineY);
-  ctx.stroke();
-  // Mid glow
-  ctx.strokeStyle = era.accent + '15';
-  ctx.lineWidth = 6;
+  // Timeline axis — single hairline rule, no colored glow.
+  ctx.strokeStyle = '#ffffff20';
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, timelineY);
   ctx.lineTo(W, timelineY);
   ctx.stroke();
 
-  // Tick marks
+  // Tick marks — minimal hairline ticks with serif year labels.
   const step = pickTickStep(vp.span);
-  ctx.fillStyle = '#ffffff50';
-  ctx.font = `11px "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace`;
+  ctx.font = `italic 12px "Fraunces", "Iowan Old Style", Georgia, serif`;
   ctx.textAlign = 'center';
   for (let y = Math.ceil(left / step) * step; y <= right; y += step) {
     const x = yearToPixel(y, vp, W);
-    ctx.strokeStyle = '#ffffff15';
+    ctx.strokeStyle = '#ffffff10';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x, timelineY - 12);
-    ctx.lineTo(x, timelineY + 12);
+    ctx.moveTo(x, timelineY - 6);
+    ctx.lineTo(x, timelineY + 6);
     ctx.stroke();
-    ctx.fillStyle = '#ffffff40';
-    ctx.fillText(formatYearShort(y), x, timelineY + 28);
+    ctx.fillStyle = '#ffffff55';
+    ctx.fillText(formatYearShort(y), x, timelineY + 24);
   }
 
   // Filter visible events
@@ -340,52 +334,43 @@ export function renderTimeline(
     ctx.fillStyle = ev.color;
     ctx.fill();
 
-    // Event marker — layered for depth
-    const markerSize = isHovered ? 24 : isSelected ? 22 : 18;
+    // Event marker — minimal hairline dot. Era color is a small accent
+    // pip; the bulk of the marker is monochrome ink-on-paper.
+    const markerSize = isHovered ? 14 : isSelected ? 13 : 10;
 
-    // Outer glow ring (hover/select)
-    if (isHovered || isSelected) {
-      ctx.shadowColor = ev.color;
-      ctx.shadowBlur = 20;
-      ctx.beginPath();
-      ctx.arc(x, evY, markerSize / 2 + 4, 0, Math.PI * 2);
-      ctx.fillStyle = ev.color + '15';
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    // Background circle
-    const markerGrad = ctx.createRadialGradient(x, evY - 2, 0, x, evY, markerSize / 2);
-    markerGrad.addColorStop(0, '#1a1f2e');
-    markerGrad.addColorStop(1, '#0d1117');
+    // Vertical hairline tying the marker to the timeline axis (subtle).
+    ctx.strokeStyle = '#ffffff15';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(x, evY, markerSize / 2, 0, Math.PI * 2);
-    ctx.fillStyle = markerGrad;
-    ctx.fill();
-    ctx.strokeStyle = ev.color + (isHovered ? 'ff' : isSelected ? 'cc' : '70');
-    ctx.lineWidth = isHovered ? 2 : 1.5;
+    ctx.moveTo(x, evY);
+    ctx.lineTo(x, timelineY);
     ctx.stroke();
 
-    // Emoji
-    ctx.font = `${markerSize * 0.6}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(ev.emoji, x, evY + 1);
+    // Filled disc — near-white, era color only on hover/select.
+    ctx.beginPath();
+    ctx.arc(x, evY, markerSize / 2, 0, Math.PI * 2);
+    ctx.fillStyle = isHovered || isSelected ? ev.color : '#f5f1e8';
+    ctx.fill();
+    if (isHovered || isSelected) {
+      ctx.strokeStyle = '#ffffff60';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
 
-    // Label with soft halo for readability
-    ctx.font = `${isHovered ? '600 ' : '400 '}${isHovered ? 13 : 11}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    // Title in serif — editorial label, white ink.
+    ctx.font = `${isHovered ? '500 ' : '400 '}${isHovered ? 14 : 12}px "Fraunces", "Iowan Old Style", Georgia, serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
     ctx.shadowBlur = 6;
     ctx.fillStyle = isHovered ? '#ffffff' : '#ffffffcc';
-    ctx.fillText(ev.title, x, evY + markerSize / 2 + 5);
+    ctx.fillText(ev.title, x, evY + markerSize / 2 + 6);
     ctx.shadowBlur = 0;
 
-    // Year sub-label
-    ctx.font = `9px "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace`;
-    ctx.fillStyle = ev.color + (isHovered ? 'cc' : '80');
-    ctx.fillText(formatYearShort(ev.year), x, evY + markerSize / 2 + 21);
+    // Year sub-label — small serif italic in muted ink.
+    ctx.font = `italic 10px "Fraunces", "Iowan Old Style", Georgia, serif`;
+    ctx.fillStyle = isHovered ? '#ffffff80' : '#ffffff50';
+    ctx.fillText(formatYearShort(ev.year), x, evY + markerSize / 2 + 22);
     ctx.lineCap = 'butt';
   }
 
