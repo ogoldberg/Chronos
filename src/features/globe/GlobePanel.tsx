@@ -872,32 +872,61 @@ export default function GlobePanel({
         paths.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(crossPoints1), crossMat));
         paths.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(crossPoints2), crossMat));
       } else {
-        // Point marker — glowing sphere
-        const pos = latLngToVector3(ev.lat!, ev.lng!, RADIUS * 1.01);
-        const size = isSelected ? 0.06 : isHovered ? 0.05 : 0.035;
-        const markerGeom = new THREE.SphereGeometry(size, 12, 12);
-        const markerMat = new THREE.MeshBasicMaterial({
+        // Drop-pin marker — a small upright cone tethered to the surface
+        // by a thin radial line, with a halo on hover/select. Reads like
+        // a real map pin from any rotation.
+        const surface = latLngToVector3(ev.lat!, ev.lng!, RADIUS * 1.005);
+        const tipHeight = isSelected ? 0.18 : isHovered ? 0.15 : 0.11;
+        const tipRadius = isSelected ? 0.045 : isHovered ? 0.038 : 0.028;
+
+        // Tether line from the tip down to the surface so the pin reads
+        // as anchored even when the camera rotates the marker out of
+        // its head-on orientation.
+        const tipPos = surface.clone().normalize().multiplyScalar(RADIUS * 1.005 + tipHeight);
+        const tetherGeom = new THREE.BufferGeometry().setFromPoints([surface, tipPos]);
+        const tetherMat = new THREE.LineBasicMaterial({
+          color: 0xf5f1e8,
+          transparent: true,
+          opacity: isSelected || isHovered ? 0.9 : 0.55,
+        });
+        markers.add(new THREE.Line(tetherGeom, tetherMat));
+
+        // Pin head — a cone pointing back at the surface, painted in the
+        // event's accent color but with a near-white tip so it pops.
+        const coneGeom = new THREE.ConeGeometry(tipRadius, tipRadius * 2.4, 12);
+        const coneMat = new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: isSelected || isHovered ? 1 : 0.7,
+          opacity: isSelected || isHovered ? 1 : 0.85,
         });
-        const marker = new THREE.Mesh(markerGeom, markerMat);
-        marker.position.copy(pos);
-        markers.add(marker);
+        const cone = new THREE.Mesh(coneGeom, coneMat);
+        cone.position.copy(tipPos);
+        // Orient the cone so its base touches the tether, tip pointing
+        // out away from the planet.
+        cone.lookAt(tipPos.clone().multiplyScalar(2));
+        cone.rotateX(Math.PI / 2);
+        markers.add(cone);
 
-        // Glow ring
+        // Bright dot at the surface anchor point.
+        const dotGeom = new THREE.SphereGeometry(tipRadius * 0.6, 10, 10);
+        const dotMat = new THREE.MeshBasicMaterial({ color: 0xf5f1e8, transparent: true, opacity: 0.95 });
+        const dot = new THREE.Mesh(dotGeom, dotMat);
+        dot.position.copy(surface);
+        markers.add(dot);
+
+        // Halo on hover/select
         if (isSelected || isHovered) {
-          const glowGeom = new THREE.RingGeometry(size * 1.5, size * 2.5, 16);
-          const glowMat = new THREE.MeshBasicMaterial({
+          const haloGeom = new THREE.RingGeometry(tipRadius * 2, tipRadius * 3.5, 24);
+          const haloMat = new THREE.MeshBasicMaterial({
             color,
             transparent: true,
-            opacity: 0.3,
+            opacity: 0.35,
             side: THREE.DoubleSide,
           });
-          const glow = new THREE.Mesh(glowGeom, glowMat);
-          glow.position.copy(pos);
-          glow.lookAt(pos.clone().multiplyScalar(2));
-          markers.add(glow);
+          const halo = new THREE.Mesh(haloGeom, haloMat);
+          halo.position.copy(surface);
+          halo.lookAt(surface.clone().multiplyScalar(2));
+          markers.add(halo);
         }
       }
     }
@@ -1089,19 +1118,25 @@ export default function GlobePanel({
     }
   }, [empiresBucket]);
 
-  // Pause auto-rotate whenever a RegionInfoCard is open. We also clear any
-  // in-flight "snap to target" animation so the globe holds steady on the
-  // place the user just clicked. Re-enable when the card closes.
+  // Mirror clickedRegion into a ref so the mouseleave callback can read
+  // it synchronously. If we relied on the React state inside the closure,
+  // a click followed by an immediate mouseleave (mouse moves to read the
+  // card before React commits the state) would re-enable auto-rotate
+  // because the closure still saw clickedRegion === null.
+  const clickedRegionRef = useRef<typeof clickedRegion>(null);
   useEffect(() => {
+    clickedRegionRef.current = clickedRegion;
     if (clickedRegion) {
+      // A region card just opened — pin the globe in place. Clear any
+      // in-flight snap-to-target so we don't drift while the card is up.
       rotationRef.current.autoRotate = false;
       targetRotationRef.current = null;
     } else {
-      // Resume after a short delay so the user can read any tooltip/card
-      // they're dismissing without the globe immediately drifting away.
+      // Card closed — resume auto-rotate after a short pause so the
+      // dismissal animation has time to settle.
       const t = setTimeout(() => {
         if (!dragRef.current.active) rotationRef.current.autoRotate = true;
-      }, 1500);
+      }, 600);
       return () => clearTimeout(t);
     }
   }, [clickedRegion]);
@@ -1112,11 +1147,13 @@ export default function GlobePanel({
     rotationRef.current.autoRotate = false;
   }, []);
   const onMouseLeavePanel = useCallback(() => {
-    // Only resume if not interacting and no card is shown.
-    if (!dragRef.current.active && !clickedRegion) {
+    // Only resume if not interacting and no card is shown. We read the
+    // ref instead of the closure-captured state so a fast click+leave
+    // sequence still keeps the globe pinned.
+    if (!dragRef.current.active && !clickedRegionRef.current) {
       rotationRef.current.autoRotate = true;
     }
-  }, [clickedRegion]);
+  }, []);
 
   // Rotate globe to focus on selected/hovered event
   useEffect(() => {
