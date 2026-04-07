@@ -92,23 +92,51 @@ export function renderTimeline(
   ctx.fillStyle = eraWash;
   ctx.fillRect(0, 0, W, H);
 
-  // Era region bands with smooth edges
+  // Era region: hairline dividers between eras + a big serif era label
+  // floating above the ruler in the centre of each era's visible span.
+  // The label is set in muted Fraunces small caps and acts as a section
+  // header for the timeline (cf. a magazine spread heading).
   for (let i = 0; i < ERAS.length; i++) {
     const eraStart = ERAS[i].start;
     const eraEnd = i < ERAS.length - 1 ? ERAS[i + 1].start : 2030;
     if (eraEnd < left || eraStart > right) continue;
-    const x1 = Math.max(0, yearToPixel(eraStart, vp, W));
-    const x2 = Math.min(W, yearToPixel(eraEnd, vp, W));
-    // Hairline divider between era bands instead of colored fills.
-    if (i > 0 && x1 > 4 && x1 < W - 4) {
+    const x1Raw = yearToPixel(eraStart, vp, W);
+    const x2Raw = yearToPixel(eraEnd, vp, W);
+    const x1 = Math.max(0, x1Raw);
+    const x2 = Math.min(W, x2Raw);
+    // Hairline divider between era bands.
+    if (i > 0 && x1Raw > 4 && x1Raw < W - 4) {
       ctx.strokeStyle = '#ffffff10';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x1, timelineY - 36);
-      ctx.lineTo(x1, timelineY + 36);
+      ctx.moveTo(x1Raw, timelineY - 36);
+      ctx.lineTo(x1Raw, timelineY + 36);
       ctx.stroke();
     }
-    void x2;
+    // Era label above the timeline. Only render if the visible band is
+    // wide enough to fit it without crowding the next era.
+    const visibleWidth = x2 - x1;
+    if (visibleWidth >= 80) {
+      const labelText = ERAS[i].label.toUpperCase();
+      const labelX = (x1 + x2) / 2;
+      const labelY = timelineY - 64;
+      ctx.font = '500 13px "Fraunces", "Iowan Old Style", Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Skip drawing if the label wouldn't fit horizontally.
+      const metrics = ctx.measureText(labelText);
+      if (metrics.width <= visibleWidth - 16) {
+        ctx.fillStyle = '#ffffff45';
+        // Letter-spacing emulation for canvas: split into chars.
+        const tracked = labelText.split('').join('\u2009\u2009');
+        ctx.fillText(tracked, labelX, labelY);
+        // Tiny serif italic year-range under the era label.
+        ctx.font = 'italic 10px "Fraunces", "Iowan Old Style", Georgia, serif';
+        ctx.fillStyle = '#ffffff25';
+        const fmt = (y: number) => y < 0 ? `${formatYearShort(y)}` : `${formatYearShort(y)}`;
+        ctx.fillText(`${fmt(eraStart)} \u2014 ${fmt(eraEnd)}`, labelX, labelY + 16);
+      }
+    }
   }
 
   // Timeline axis — single hairline rule, no colored glow.
