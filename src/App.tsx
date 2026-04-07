@@ -169,10 +169,8 @@ export default function App() {
         onOpenPalette={() => setPaletteOpen(true)}
       />
 
-      {/* Lane toggle and scroll hint were removed from the canvas. Lane
-          filtering is reachable from the command palette ("Compare regions",
-          "Apply a lens"); the scroll-to-zoom affordance lives in the help
-          overlay now. */}
+      {/* First-run hint — auto-hides after 5 seconds. */}
+      <ScrollHint />
 
       {/* Event card */}
       {selectedEvent && (
@@ -275,3 +273,14 @@ export default function App() {
   );
 }
 
+function ScrollHint() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setVisible(false), 5000); return () => clearTimeout(t); }, []);
+  if (!visible) return null;
+  return (
+    <div className="scroll-hint">
+      <div>Scroll to zoom &middot; Drag to pan &middot; Click events to explore</div>
+      <div className="scroll-hint-arrow">&#x2195;</div>
+    </div>
+  );
+}

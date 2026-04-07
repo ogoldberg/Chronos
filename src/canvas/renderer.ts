@@ -382,35 +382,29 @@ export function renderTimeline(
     const RADIUS = 14;
 
     // Connector line from timeline to cluster bubble
-    ctx.strokeStyle = color + '40';
+    // Hairline connector
+    ctx.strokeStyle = '#ffffff20';
     ctx.lineWidth = 1;
-    ctx.setLineDash([3, 3]);
     ctx.beginPath();
     ctx.moveTo(cx, timelineY);
     ctx.lineTo(cx, clusterY + RADIUS);
     ctx.stroke();
-    ctx.setLineDash([]);
+    void color;
 
-    // Dot on timeline axis
-    ctx.beginPath();
-    ctx.arc(cx, timelineY, 4, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-
-    // Translucent filled circle (radius 14px)
+    // Outline-only count circle in ink ivory
     ctx.beginPath();
     ctx.arc(cx, clusterY, RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = color + '40';
+    ctx.fillStyle = 'rgba(10,14,26,0.85)';
     ctx.fill();
-    ctx.strokeStyle = color + 'aa';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffffff35';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Count text
-    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+    // Count text in serif
+    ctx.font = '500 12px "Fraunces", "Iowan Old Style", Georgia, serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffffee';
+    ctx.fillStyle = '#f5f1e8';
     ctx.fillText(String(count), cx, clusterY);
 
     // Add cluster to hitTargets so clicking it can zoom in

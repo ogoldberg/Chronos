@@ -1,6 +1,7 @@
 import type { Viewport } from '../types';
 import { formatYear } from '../utils/format';
 import { getEra } from '../data/eras';
+import { useUIStore } from '../stores/uiStore';
 
 interface Props {
   viewport: Viewport;
@@ -28,6 +29,8 @@ interface Props {
 export default function EditorialHeader({ viewport, onOpenDatePicker, onOpenPalette }: Props) {
   const era = getEra(viewport.centerYear);
   const yearLabel = formatYear(viewport.centerYear);
+  const activeLens = useUIStore(s => s.activeLens);
+  const setActiveLens = useUIStore(s => s.setActiveLens);
 
   return (
     <header
@@ -124,8 +127,46 @@ export default function EditorialHeader({ viewport, onOpenDatePicker, onOpenPale
         </span>
       </button>
 
-      {/* Right: ⌘K affordance */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', pointerEvents: 'auto' }}>
+      {/* Right: active lens chip (if any) + ⌘K affordance */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, pointerEvents: 'auto' }}>
+        {activeLens && (
+          <div
+            title={`Active lens: ${activeLens.name}. Click \u2715 to clear.`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '5px 10px 5px 12px',
+              border: '1px solid var(--hairline)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'transparent',
+              fontFamily: 'var(--font-display)',
+              fontStyle: 'italic',
+              fontSize: 12,
+              letterSpacing: '0.04em',
+              color: 'var(--paper-mute)',
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: activeLens.color, display: 'inline-block' }} />
+            <span>{activeLens.name}</span>
+            <button
+              onClick={() => setActiveLens(null)}
+              aria-label="Clear lens"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--paper-ghost)',
+                cursor: 'pointer',
+                padding: 0,
+                marginLeft: 2,
+                fontSize: 13,
+                lineHeight: 1,
+              }}
+            >
+              &times;
+            </button>
+          </div>
+        )}
         <button
           onClick={onOpenPalette}
           title="Open command palette"
