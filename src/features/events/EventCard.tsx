@@ -54,19 +54,21 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
       top: '50%',
       left: '50%',
       transform: 'translate(-50%, -50%)',
-      background: 'rgba(10, 13, 20, 0.96)',
-      border: `1px solid ${event.color}30`,
-      borderRadius: 18,
+      background: 'rgba(10, 14, 26, 0.96)',
+      border: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+      borderRadius: 2,
       padding: 0,
-      maxWidth: 480,
+      maxWidth: 520,
       width: '90vw',
-      maxHeight: '80vh',
+      maxHeight: '82vh',
       overflow: 'hidden',
       overflowY: 'auto',
       zIndex: 100,
       backdropFilter: 'blur(24px)',
-      boxShadow: `0 0 60px ${event.color}15, 0 24px 80px rgba(0,0,0,0.6)`,
+      WebkitBackdropFilter: 'blur(24px)',
+      boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
       animation: 'modalSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+      fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
     }}>
       {/* Header image with shimmer loading state */}
       {(event.imageUrl || wiki?.thumb) && (
@@ -112,64 +114,75 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         {/* Close button */}
         <button
           onClick={onClose}
+          aria-label="Close"
           style={{
             position: 'absolute',
-            top: 12,
-            right: 12,
-            background: 'rgba(0,0,0,0.5)',
-            border: 'none',
-            color: '#fff',
-            fontSize: 18,
+            top: 14,
+            right: 14,
+            background: 'transparent',
+            border: '1px solid var(--hairline, rgba(255,255,255,0.12))',
+            color: 'var(--paper-mute, #ffffff80)',
+            fontSize: 14,
             cursor: 'pointer',
-            borderRadius: '50%',
-            width: 32,
-            height: 32,
+            borderRadius: 2,
+            width: 28,
+            height: 28,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backdropFilter: 'blur(10px)',
+            fontFamily: 'var(--font-display, Fraunces, serif)',
           }}
         >
-          ✕
+          &times;
         </button>
 
-        {/* Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <span style={{ fontSize: 28 }}>{event.emoji}</span>
-          <div>
-            <h2 style={{ margin: 0, color: '#fff', fontSize: 20 }}>{event.title}</h2>
-            <span style={{ color: event.color, fontSize: 13, fontFamily: 'monospace' }}>
-              {event.timestamp
-                ? new Date(event.timestamp).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: event.precision && ['month','week','day','hour','minute'].includes(event.precision) ? 'long' : undefined,
-                    day: event.precision && ['day','hour','minute'].includes(event.precision) ? 'numeric' : undefined,
-                  })
-                : formatYear(event.year)
-              }
-            </span>
-            {event.precision && event.precision !== 'year' && (
-              <span style={{ color: '#ffffff40', fontSize: 10, marginLeft: 6 }}>
-                ({event.precision} precision)
-              </span>
-            )}
-          </div>
+        {/* Source eyebrow */}
+        <div style={{
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '0.18em',
+          marginBottom: 10,
+          color: 'var(--paper-ghost, #ffffff45)',
+          textTransform: 'uppercase',
+          fontFamily: 'var(--font-display, Fraunces, serif)',
+        }}>
+          {event.source === 'anchor' ? 'Curated' : 'AI + Web Search'}
         </div>
 
-        {/* Source badge */}
-        <div style={{
-          display: 'inline-block',
-          padding: '2px 8px',
-          borderRadius: 10,
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: 0.5,
-          marginBottom: 12,
-          background: event.source === 'anchor' ? '#daa52030' : '#00bfff30',
-          color: event.source === 'anchor' ? '#daa520' : '#00bfff',
-          border: `1px solid ${event.source === 'anchor' ? '#daa52040' : '#00bfff40'}`,
+        {/* Title */}
+        <h2 style={{
+          margin: '0 0 4px',
+          color: 'var(--paper, #f5f1e8)',
+          fontSize: 30,
+          fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+          fontWeight: 500,
+          letterSpacing: '-0.005em',
+          lineHeight: 1.1,
         }}>
-          {event.source === 'anchor' ? 'CURATED' : 'AI + WEB SEARCH'}
+          {event.title}
+        </h2>
+
+        {/* Date subtitle */}
+        <div style={{
+          fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+          fontStyle: 'italic',
+          color: 'var(--paper-mute, #ffffff70)',
+          fontSize: 14,
+          marginBottom: 16,
+        }}>
+          {event.timestamp
+            ? new Date(event.timestamp).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: event.precision && ['month','week','day','hour','minute'].includes(event.precision) ? 'long' : undefined,
+                day: event.precision && ['day','hour','minute'].includes(event.precision) ? 'numeric' : undefined,
+              })
+            : formatYear(event.year)
+          }
+          {event.precision && event.precision !== 'year' && (
+            <span style={{ color: 'var(--paper-ghost, #ffffff40)', fontSize: 11, marginLeft: 8, fontStyle: 'normal' }}>
+              ({event.precision} precision)
+            </span>
+          )}
         </div>
         {/* Fact-check badge for discovered events */}
         {factCheck && (
