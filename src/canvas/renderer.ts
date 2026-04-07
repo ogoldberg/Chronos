@@ -308,43 +308,25 @@ export function renderTimeline(
     const isHovered = hoveredId === ev.id;
     const isSelected = selectedId === ev.id;
 
-    // Connector line — subtle gradient fade
-    const connGrad = ctx.createLinearGradient(x, timelineY, x, evY);
-    connGrad.addColorStop(0, ev.color + (isHovered ? '90' : '50'));
-    connGrad.addColorStop(1, ev.color + (isHovered ? '40' : '15'));
-    ctx.strokeStyle = connGrad;
-    ctx.lineWidth = isHovered ? 2 : 1;
-    ctx.lineCap = 'round';
-    ctx.setLineDash(isHovered ? [] : [1, 6]);
+    // Event marker — minimal hairline dot. Era color is reserved for
+    // hover/select state; everything else is ink-on-paper.
+    const markerSize = isHovered ? 14 : isSelected ? 13 : 10;
+
+    // Single dropline from the marker down to the timeline axis. The
+    // line is a solid hairline; on hover it picks up the era accent.
+    ctx.strokeStyle = isHovered || isSelected ? ev.color + 'aa' : '#ffffff18';
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'butt';
     ctx.beginPath();
     ctx.moveTo(x, timelineY);
     ctx.lineTo(x, evY);
     ctx.stroke();
-    ctx.setLineDash([]);
 
-    // Event dot on timeline axis with glow
-    if (isHovered || isSelected) {
-      ctx.beginPath();
-      ctx.arc(x, timelineY, 8, 0, Math.PI * 2);
-      ctx.fillStyle = ev.color + '20';
-      ctx.fill();
-    }
+    // Tiny tick where the dropline meets the axis (no fill pip).
     ctx.beginPath();
-    ctx.arc(x, timelineY, isHovered ? 5 : 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = ev.color;
+    ctx.arc(x, timelineY, isHovered ? 2.5 : 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = isHovered || isSelected ? ev.color : '#ffffff60';
     ctx.fill();
-
-    // Event marker — minimal hairline dot. Era color is a small accent
-    // pip; the bulk of the marker is monochrome ink-on-paper.
-    const markerSize = isHovered ? 14 : isSelected ? 13 : 10;
-
-    // Vertical hairline tying the marker to the timeline axis (subtle).
-    ctx.strokeStyle = '#ffffff15';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, evY);
-    ctx.lineTo(x, timelineY);
-    ctx.stroke();
 
     // Filled disc — near-white, era color only on hover/select.
     ctx.beginPath();
