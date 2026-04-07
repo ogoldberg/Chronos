@@ -351,18 +351,18 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
 
   return (
     <div style={{
-      position: 'absolute',
-      bottom: 20,
-      right: 20,
-      width: 400,
-      maxWidth: 'calc(100vw - 40px)',
-      height: 520,
-      maxHeight: 'calc(100vh - 100px)',
-      background: 'rgba(13, 17, 23, 0.95)',
-      borderRadius: 16,
-      border: '1px solid rgba(255,255,255,0.08)',
+      // Persistent right drawer — full canvas height, anchored under
+      // the editorial header, always-on when activePanel === 'chat'.
+      position: 'fixed',
+      top: 56,
+      right: 0,
+      bottom: 0,
+      width: 'min(420px, 36vw)',
+      background: 'rgba(10,14,26,0.92)',
+      borderLeft: '1px solid var(--hairline, rgba(255,255,255,0.08))',
       backdropFilter: 'blur(20px)',
-      boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+      WebkitBackdropFilter: 'blur(20px)',
+      boxShadow: '-12px 0 40px rgba(0,0,0,0.35)',
       zIndex: 50,
       display: 'flex',
       flexDirection: 'column',
@@ -370,17 +370,34 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
     }}>
       {/* Header */}
       <div style={{
-        padding: '14px 18px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        padding: '18px 22px 14px',
+        borderBottom: '1px solid var(--hairline, rgba(255,255,255,0.06))',
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
       }}>
-        <span style={{ fontSize: 20 }}>🧭</span>
-        <div>
-          <div style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>CHRONOS Guide</div>
-          <div style={{ color: '#ffffff50', fontSize: 10, fontFamily: 'monospace' }}>
-            AI History Companion
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+          <div style={{
+            fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+            fontSize: 18,
+            fontWeight: 500,
+            color: 'var(--paper, #f5f1e8)',
+            letterSpacing: '0.01em',
+            lineHeight: 1.1,
+          }}>
+            The Guide
+          </div>
+          <div style={{
+            fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+            fontStyle: 'italic',
+            color: 'var(--paper-mute, #ffffff60)',
+            fontSize: 11,
+            letterSpacing: '0.02em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            ask anything about what you see
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
