@@ -49,10 +49,17 @@ interface TimelineState {
 export const useTimelineStore = create<TimelineState>((set, get) => ({
   viewport: urlState.viewport ? clampViewport(urlState.viewport) : defaultViewport(),
   setViewport: (vp) => {
+    // Always clamp on write. Callers like the cluster-click zoom compute a
+    // viewport whose right edge can spill into the future (e.g. a cluster of
+    // events spanning -700M..2025 produces center=-518M, span=3.5B, right
+    // edge = +1.23B), which is a future year the rest of the pipeline
+    // forbids. Without this clamp, the first pan after such a zoom snaps
+    // the center violently backward to maxCenter, looking to the user like
+    // the timeline "resets" on drag.
     if (typeof vp === 'function') {
-      set(state => ({ viewport: vp(state.viewport) }));
+      set(state => ({ viewport: clampViewport(vp(state.viewport)) }));
     } else {
-      set({ viewport: vp });
+      set({ viewport: clampViewport(vp) });
     }
   },
 
