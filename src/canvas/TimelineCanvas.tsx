@@ -8,6 +8,7 @@ interface Props {
   events: TimelineEvent[];
   selectedId: string | null;
   activeLanes?: Set<string>;
+  activeThemes?: Set<string>;
   onViewportChange: (vp: Viewport) => void;
   onSelectEvent: (ev: TimelineEvent | null) => void;
   onHoverEvent: (ev: TimelineEvent | null) => void;
@@ -21,6 +22,7 @@ export default function TimelineCanvas({
   events,
   selectedId,
   activeLanes,
+  activeThemes,
   onViewportChange,
   onSelectEvent,
   onHoverEvent,
@@ -77,8 +79,9 @@ export default function TimelineCanvas({
       hoveredId,
       selectedId,
       activeLanes,
+      activeThemes,
     );
-  }, [viewport, events, dims, hoveredId, selectedId, activeLanes]);
+  }, [viewport, events, dims, hoveredId, selectedId, activeLanes, activeThemes]);
 
   // Wheel zoom
   const onWheel = useCallback(

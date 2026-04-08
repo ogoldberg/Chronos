@@ -9,6 +9,7 @@ import { useTourStore } from './stores/tourStore';
 import TimelineCanvas from './canvas/TimelineCanvas';
 import EditorialHeader from './components/EditorialHeader';
 import CommandPalette from './components/CommandPalette';
+import ThemedTimelinesControl from './features/themedTimelines/ThemedTimelinesControl';
 import EventCard from './features/events/EventCard';
 import PeriodCard from './features/period/PeriodCard';
 import DatePickerPopover from './components/DatePickerPopover';
@@ -44,6 +45,8 @@ export default function App() {
   const toggleGlobe = useUIStore(s => s.toggleGlobe);
   const lanesEnabled = useUIStore(s => s.lanesEnabled);
   const activeLanes = useUIStore(s => s.activeLanes);
+  const themedTimelinesEnabled = useUIStore(s => s.themedTimelinesEnabled);
+  const activeThemes = useUIStore(s => s.activeThemes);
   const setChatInitMsg = useUIStore(s => s.setChatInitMsg);
 
   const tourStops = useTourStore(s => s.stops);
@@ -151,6 +154,7 @@ export default function App() {
         events={allEvents}
         selectedId={selectedEvent?.id ?? null}
         activeLanes={lanesEnabled ? activeLanes : undefined}
+        activeThemes={themedTimelinesEnabled ? activeThemes : undefined}
         onViewportChange={setViewport}
         onSelectEvent={handleSelectEvent}
         onHoverEvent={setHoveredEvent}
@@ -168,6 +172,9 @@ export default function App() {
         onOpenDatePicker={() => setDatePickerOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
       />
+
+      {/* Parallel themed timelines toggle / theme picker */}
+      <ThemedTimelinesControl />
 
       {/* First-run hint — auto-hides after 5 seconds. */}
       <ScrollHint />

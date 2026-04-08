@@ -35,6 +35,15 @@ interface UIState {
   activeLanes: Set<string>;
   toggleLane: (id: string) => void;
 
+  // Parallel themed timelines — stacked tracks (science, art, war, …)
+  // with convergence curves where events belong to more than one theme.
+  // Mutually exclusive with region lanes: enabling one turns the other
+  // off, since they both want to rewrite the canvas layout.
+  themedTimelinesEnabled: boolean;
+  toggleThemedTimelines: () => void;
+  activeThemes: Set<string>;
+  toggleActiveTheme: (id: string) => void;
+
   // Active lens
   activeLens: { name: string; emoji: string; color: string } | null;
   setActiveLens: (lens: UIState['activeLens']) => void;
@@ -49,6 +58,9 @@ interface UIState {
 }
 
 const ALL_LANES = new Set(['europe', 'mideast', 'eastasia', 'southasia', 'africa', 'americas']);
+// Default to all six themes on so the first glimpse of themed mode is the
+// most interesting — seeing every thread side by side.
+const ALL_THEMES = new Set(['science', 'art', 'war', 'power', 'tech', 'belief']);
 
 export const useUIStore = create<UIState>((set) => ({
   activePanel: null,
@@ -62,13 +74,31 @@ export const useUIStore = create<UIState>((set) => ({
   toggleVoice: () => set(s => ({ voice: !s.voice })),
 
   lanesEnabled: false,
-  toggleLanes: () => set(s => ({ lanesEnabled: !s.lanesEnabled })),
+  toggleLanes: () => set(s => ({
+    lanesEnabled: !s.lanesEnabled,
+    // Region lanes and themed timelines both rewrite the layout, so we
+    // never let them run at the same time.
+    themedTimelinesEnabled: s.lanesEnabled ? s.themedTimelinesEnabled : false,
+  })),
   activeLanes: ALL_LANES,
   toggleLane: (id) => set(s => {
     const next = new Set(s.activeLanes);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     return { activeLanes: next };
+  }),
+
+  themedTimelinesEnabled: false,
+  toggleThemedTimelines: () => set(s => ({
+    themedTimelinesEnabled: !s.themedTimelinesEnabled,
+    lanesEnabled: s.themedTimelinesEnabled ? s.lanesEnabled : false,
+  })),
+  activeThemes: ALL_THEMES,
+  toggleActiveTheme: (id) => set(s => {
+    const next = new Set(s.activeThemes);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return { activeThemes: next };
   }),
 
   activeLens: null,

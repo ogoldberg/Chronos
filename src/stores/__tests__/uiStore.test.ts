@@ -93,6 +93,47 @@ describe('uiStore', () => {
     });
   });
 
+  describe('themed timelines', () => {
+    it('themed timelines disabled by default', () => {
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(false);
+    });
+
+    it('starts with every theme active', () => {
+      const themes = useUIStore.getState().activeThemes;
+      expect(themes.size).toBeGreaterThanOrEqual(6);
+      expect(themes.has('science')).toBe(true);
+      expect(themes.has('art')).toBe(true);
+    });
+
+    it('toggleThemedTimelines flips the flag', () => {
+      useUIStore.getState().toggleThemedTimelines();
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(true);
+      useUIStore.getState().toggleThemedTimelines();
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(false);
+    });
+
+    it('toggleActiveTheme adds and removes individual themes', () => {
+      useUIStore.getState().toggleActiveTheme('war');
+      expect(useUIStore.getState().activeThemes.has('war')).toBe(false);
+      useUIStore.getState().toggleActiveTheme('war');
+      expect(useUIStore.getState().activeThemes.has('war')).toBe(true);
+    });
+
+    it('enabling themed timelines turns off region lanes', () => {
+      useUIStore.setState({ lanesEnabled: true, themedTimelinesEnabled: false });
+      useUIStore.getState().toggleThemedTimelines();
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(true);
+      expect(useUIStore.getState().lanesEnabled).toBe(false);
+    });
+
+    it('enabling region lanes turns off themed timelines', () => {
+      useUIStore.setState({ lanesEnabled: false, themedTimelinesEnabled: true });
+      useUIStore.getState().toggleLanes();
+      expect(useUIStore.getState().lanesEnabled).toBe(true);
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(false);
+    });
+  });
+
   describe('chat init message', () => {
     it('setChatInitMsg sets and clears', () => {
       useUIStore.getState().setChatInitMsg('Tell me about Rome');

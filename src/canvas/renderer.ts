@@ -3,6 +3,13 @@ import { getEra, ERAS } from '../data/eras';
 import { formatYear, formatYearShort } from '../utils/format';
 import { yearToPixel, isEventVisible } from './viewport';
 import { REGION_LANES, matchEventToRegion } from '../data/regions';
+import {
+  THEMES,
+  THEMES_BY_ID,
+  getEventThemes,
+  findMultiThemeConvergences,
+  findThreadConvergences,
+} from '../data/themes';
 
 const TICK_STEPS = [
   1e10, 5e9, 2e9, 1e9, 5e8, 2e8, 1e8, 5e7, 2e7, 1e7,
@@ -34,6 +41,7 @@ export function renderTimeline(
   hoveredId: string | null,
   selectedId: string | null,
   activeLanes?: Set<string>,
+  activeThemes?: Set<string>,
 ): HitTarget[] {
   const dpr = window.devicePixelRatio || 1;
   const W = width;
@@ -91,6 +99,14 @@ export function renderTimeline(
   eraWash.addColorStop(1, 'transparent');
   ctx.fillStyle = eraWash;
   ctx.fillRect(0, 0, W, H);
+
+  // Parallel themed tracks short-circuit the normal layout: they own the
+  // whole event area and draw their own axis / ticks / labels per track.
+  if (activeThemes && activeThemes.size > 0) {
+    return renderThemedTracks(
+      ctx, vp, events, W, H, left, right, hoveredId, selectedId, activeThemes,
+    );
+  }
 
   // Era region: hairline dividers between eras + a big serif era label
   // floating above the ruler in the centre of each era's visible span.
@@ -490,3 +506,224 @@ export function renderTimeline(
 
   return hitTargets;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Themed parallel tracks                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Draws every active theme as its own horizontal track with the same
+ * shared x-axis (year). Events that belong to more than one active theme
+ * create a **convergence** — a soft vertical curve that weaves through
+ * every track the event sits on. Causal connections that cross theme
+ * boundaries draw an arc between the source and target events.
+ *
+ * Invariant: the returned hit targets only include events that are drawn
+ * on at least one active track; an event can appear multiple times in the
+ * hit-target list (once per track), which is fine because the hit tester
+ * picks the nearest point under the cursor.
+ */
+function renderThemedTracks(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  events: TimelineEvent[],
+  W: number,
+  H: number,
+  left: number,
+  right: number,
+  hoveredId: string | null,
+  selectedId: string | null,
+  activeThemes: Set<string>,
+): HitTarget[] {
+  // Preserve the THEMES order for a stable top-to-bottom stacking.
+  const activeList = THEMES.filter(t => activeThemes.has(t.id));
+  if (activeList.length === 0) return [];
+
+  // Vertical layout. Reserve a strip at the top for the year ruler and a
+  // strip at the bottom for the track labels we already ran through.
+  const TOP_PAD = 96;    // room for the editorial header
+  const BOTTOM_PAD = 48; // room for the shared year tick labels
+  const usable = H - TOP_PAD - BOTTOM_PAD;
+  const trackGap = Math.max(56, Math.min(120, usable / activeList.length));
+  const trackYs: Record<string, number> = {};
+  activeList.forEach((theme, i) => {
+    trackYs[theme.id] = TOP_PAD + trackGap * (i + 0.5);
+  });
+
+  // Year tick ruler along the bottom of the themed area so panning still
+  // has a time reference. Reuses the same step picker as the main axis.
+  const rulerY = TOP_PAD + trackGap * activeList.length + 16;
+  const step = pickTickStep(vp.span);
+  ctx.font = `italic 11px "Fraunces", "Iowan Old Style", Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.strokeStyle = '#ffffff14';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, rulerY);
+  ctx.lineTo(W, rulerY);
+  ctx.stroke();
+  for (let y = Math.ceil(left / step) * step; y <= right; y += step) {
+    const x = yearToPixel(y, vp, W);
+    ctx.strokeStyle = '#ffffff12';
+    ctx.beginPath();
+    ctx.moveTo(x, rulerY - 4);
+    ctx.lineTo(x, rulerY + 4);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff45';
+    ctx.fillText(formatYearShort(y), x, rulerY + 18);
+  }
+
+  // Draw each track's ink line + label first so convergence curves can
+  // paint over them cleanly.
+  for (const theme of activeList) {
+    const ty = trackYs[theme.id];
+    // Hairline track baseline
+    ctx.strokeStyle = theme.color + '35';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, ty);
+    ctx.lineTo(W, ty);
+    ctx.stroke();
+
+    // Subtle tinted wash so tracks read as separate bands.
+    ctx.fillStyle = theme.color + '08';
+    ctx.fillRect(0, ty - trackGap * 0.4, W, trackGap * 0.8);
+
+    // Track label in the gutter (top-left of the track).
+    ctx.font = '500 11px "Fraunces", "Iowan Old Style", Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = theme.color + 'cc';
+    ctx.fillText(`${theme.emoji}  ${theme.label}`, 16, ty - trackGap * 0.35);
+  }
+
+  // Filter visible events once, then fan them out across every track they
+  // match. An event on two themes ends up with two entries in `placed`.
+  const visible = events.filter(ev => isEventVisible(ev, vp));
+  const placed: { ev: TimelineEvent; themeId: string; x: number; y: number }[] = [];
+  for (const ev of visible) {
+    const x = yearToPixel(ev.year, vp, W);
+    if (x < -50 || x > W + 50) continue;
+    const themeIds = getEventThemes(ev).filter(id => activeThemes.has(id));
+    for (const themeId of themeIds) {
+      placed.push({ ev, themeId, x, y: trackYs[themeId] });
+    }
+  }
+
+  // Convergence curves — drawn under the markers so the markers sit on top.
+  // Multi-theme events get a soft vertical ribbon weaving through each
+  // track they touch.
+  const multi = findMultiThemeConvergences(visible, activeThemes);
+  for (const c of multi) {
+    const x = yearToPixel(c.event.year, vp, W);
+    if (x < -50 || x > W + 50) continue;
+    const ys = c.themeIds
+      .filter(id => trackYs[id] !== undefined)
+      .map(id => trackYs[id])
+      .sort((a, b) => a - b);
+    if (ys.length < 2) continue;
+
+    // Soft gradient ribbon between the topmost and bottommost tracks.
+    const grad = ctx.createLinearGradient(x, ys[0], x, ys[ys.length - 1]);
+    grad.addColorStop(0, '#f5f1e8a0');
+    grad.addColorStop(0.5, '#f5f1e8d0');
+    grad.addColorStop(1, '#f5f1e8a0');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x, ys[0]);
+    // Slight horizontal wobble so the line reads as a "thread" rather
+    // than a raw vertical bar: Bezier through each intermediate track.
+    for (let i = 1; i < ys.length; i++) {
+      const prev = ys[i - 1];
+      const curr = ys[i];
+      const midY = (prev + curr) / 2;
+      ctx.bezierCurveTo(x + 6, midY - 4, x - 6, midY + 4, x, curr);
+    }
+    ctx.stroke();
+
+    // Small diamond at each intersection point as a convergence marker.
+    for (const y of ys) {
+      ctx.fillStyle = '#f5f1e8';
+      ctx.beginPath();
+      ctx.moveTo(x, y - 3);
+      ctx.lineTo(x + 3, y);
+      ctx.lineTo(x, y + 3);
+      ctx.lineTo(x - 3, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // Causal threads that cross from one theme to another.
+  const threads = findThreadConvergences(visible, activeThemes);
+  for (const t of threads) {
+    const fromX = yearToPixel(t.from.year, vp, W);
+    const toX = yearToPixel(t.to.year, vp, W);
+    const fromY = trackYs[t.fromTheme];
+    const toY = trackYs[t.toTheme];
+    if (fromY == null || toY == null) continue;
+    if (
+      (fromX < -80 && toX < -80) ||
+      (fromX > W + 80 && toX > W + 80)
+    ) continue;
+
+    const srcColor = THEMES_BY_ID[t.fromTheme]?.color || '#ffffff';
+    ctx.strokeStyle = srcColor + '55';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    // Curve control offset by the vertical distance — keeps short hops
+    // close to straight and long hops nicely arched.
+    const ctrlX = (fromX + toX) / 2;
+    const ctrlY = (fromY + toY) / 2 - Math.abs(toY - fromY) * 0.35 - 12;
+    ctx.quadraticCurveTo(ctrlX, ctrlY, toX, toY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Event markers — hairline ivory discs, same ink-on-paper palette as
+  // the main renderer but scaled down so four tracks don't feel noisy.
+  const hitTargets: HitTarget[] = [];
+  for (const p of placed) {
+    const { ev, x, y } = p;
+    const isHovered = hoveredId === ev.id;
+    const isSelected = selectedId === ev.id;
+    const themeColor = THEMES_BY_ID[p.themeId]?.color || ev.color;
+    const markerSize = isHovered ? 12 : isSelected ? 11 : 9;
+
+    // Marker disc — theme color on hover/select, ivory otherwise.
+    ctx.beginPath();
+    ctx.arc(x, y, markerSize / 2, 0, Math.PI * 2);
+    ctx.fillStyle = isHovered || isSelected ? themeColor : '#f5f1e8';
+    ctx.fill();
+    if (isHovered || isSelected) {
+      ctx.strokeStyle = '#ffffff60';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Title only for hovered / selected events — otherwise the canvas
+    // gets unreadable fast with six tracks of overlapping labels.
+    if (isHovered || isSelected) {
+      ctx.font = '500 12px "Fraunces", "Iowan Old Style", Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(ev.title, x, y + markerSize / 2 + 4);
+      ctx.font = 'italic 10px "Fraunces", "Iowan Old Style", Georgia, serif';
+      ctx.fillStyle = '#ffffff80';
+      ctx.fillText(formatYearShort(ev.year), x, y + markerSize / 2 + 20);
+      ctx.shadowBlur = 0;
+    }
+
+    hitTargets.push({ event: ev, x, y });
+  }
+
+  return hitTargets;
+}
+
