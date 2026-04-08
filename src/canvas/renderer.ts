@@ -4,12 +4,12 @@ import { formatYear, formatYearShort } from '../utils/format';
 import { yearToPixel, isEventVisible } from './viewport';
 import { REGION_LANES, matchEventToRegion } from '../data/regions';
 import {
-  THEMES,
-  THEMES_BY_ID,
+  type TimelineTheme,
   getEventThemes,
   findMultiThemeConvergences,
   findThreadConvergences,
 } from '../data/themes';
+import type { ProposedThread } from '../stores/timelineStore';
 
 const TICK_STEPS = [
   1e10, 5e9, 2e9, 1e9, 5e8, 2e8, 1e8, 5e7, 2e7, 1e7,
@@ -41,7 +41,19 @@ export function renderTimeline(
   hoveredId: string | null,
   selectedId: string | null,
   activeLanes?: Set<string>,
-  activeThemes?: Set<string>,
+  /**
+   * Resolved list of active themed tracks (built-in + user-authored,
+   * already filtered to the ones the user has enabled). When present
+   * and non-empty, the renderer draws parallel tracks instead of the
+   * standard single-timeline layout.
+   */
+  activeThemes?: TimelineTheme[],
+  /**
+   * User-proposed convergences that the AI validated. Drawn as distinct
+   * amber dashed arcs over whichever layout is active (normal or themed),
+   * always visible — not gated on hover the way ev.connections arcs are.
+   */
+  proposedThreads?: ProposedThread[],
 ): HitTarget[] {
   const dpr = window.devicePixelRatio || 1;
   const W = width;
@@ -102,9 +114,9 @@ export function renderTimeline(
 
   // Parallel themed tracks short-circuit the normal layout: they own the
   // whole event area and draw their own axis / ticks / labels per track.
-  if (activeThemes && activeThemes.size > 0) {
+  if (activeThemes && activeThemes.length > 0) {
     return renderThemedTracks(
-      ctx, vp, events, W, H, left, right, hoveredId, selectedId, activeThemes,
+      ctx, vp, events, W, H, left, right, hoveredId, selectedId, activeThemes, proposedThreads,
     );
   }
 
@@ -504,6 +516,15 @@ export function renderTimeline(
   // header surfaces both pieces of information typographically, so we
   // skip the on-canvas overlay entirely.)
 
+  // Draw user-proposed threads on top of the normal layout too.
+  if (proposedThreads && proposedThreads.length > 0) {
+    const byTitle = new Map<string, { x: number; y: number }>();
+    for (const ht of hitTargets) {
+      if (!byTitle.has(ht.event.title)) byTitle.set(ht.event.title, { x: ht.x, y: ht.y });
+    }
+    drawProposedThreads(ctx, proposedThreads, byTitle, vp, W);
+  }
+
   return hitTargets;
 }
 
@@ -533,11 +554,18 @@ function renderThemedTracks(
   right: number,
   hoveredId: string | null,
   selectedId: string | null,
-  activeThemes: Set<string>,
+  activeThemes: TimelineTheme[],
+  proposedThreads?: ProposedThread[],
 ): HitTarget[] {
-  // Preserve the THEMES order for a stable top-to-bottom stacking.
-  const activeList = THEMES.filter(t => activeThemes.has(t.id));
+  // The caller hands us a resolved theme list in the display order we
+  // want top-to-bottom. Built-in themes come first by convention, custom
+  // user themes tacked onto the bottom.
+  const activeList = activeThemes;
   if (activeList.length === 0) return [];
+  const activeIds = new Set(activeList.map(t => t.id));
+  const themeById: Record<string, TimelineTheme> = Object.fromEntries(
+    activeList.map(t => [t.id, t]),
+  );
 
   // Vertical layout. Reserve a strip at the top for the year ruler and a
   // strip at the bottom for the track labels we already ran through.
@@ -604,7 +632,7 @@ function renderThemedTracks(
   for (const ev of visible) {
     const x = yearToPixel(ev.year, vp, W);
     if (x < -50 || x > W + 50) continue;
-    const themeIds = getEventThemes(ev).filter(id => activeThemes.has(id));
+    const themeIds = getEventThemes(ev, activeList).filter(id => activeIds.has(id));
     for (const themeId of themeIds) {
       placed.push({ ev, themeId, x, y: trackYs[themeId] });
     }
@@ -613,7 +641,7 @@ function renderThemedTracks(
   // Convergence curves — drawn under the markers so the markers sit on top.
   // Multi-theme events get a soft vertical ribbon weaving through each
   // track they touch.
-  const multi = findMultiThemeConvergences(visible, activeThemes);
+  const multi = findMultiThemeConvergences(visible, activeIds, activeList);
   for (const c of multi) {
     const x = yearToPixel(c.event.year, vp, W);
     if (x < -50 || x > W + 50) continue;
@@ -657,7 +685,7 @@ function renderThemedTracks(
   }
 
   // Causal threads that cross from one theme to another.
-  const threads = findThreadConvergences(visible, activeThemes);
+  const threads = findThreadConvergences(visible, activeIds, activeList);
   for (const t of threads) {
     const fromX = yearToPixel(t.from.year, vp, W);
     const toX = yearToPixel(t.to.year, vp, W);
@@ -669,7 +697,7 @@ function renderThemedTracks(
       (fromX > W + 80 && toX > W + 80)
     ) continue;
 
-    const srcColor = THEMES_BY_ID[t.fromTheme]?.color || '#ffffff';
+    const srcColor = themeById[t.fromTheme]?.color || '#ffffff';
     ctx.strokeStyle = srcColor + '55';
     ctx.lineWidth = 1.2;
     ctx.setLineDash([3, 4]);
@@ -691,7 +719,7 @@ function renderThemedTracks(
     const { ev, x, y } = p;
     const isHovered = hoveredId === ev.id;
     const isSelected = selectedId === ev.id;
-    const themeColor = THEMES_BY_ID[p.themeId]?.color || ev.color;
+    const themeColor = themeById[p.themeId]?.color || ev.color;
     const markerSize = isHovered ? 12 : isSelected ? 11 : 9;
 
     // Marker disc — theme color on hover/select, ivory otherwise.
@@ -724,6 +752,72 @@ function renderThemedTracks(
     hitTargets.push({ event: ev, x, y });
   }
 
+  // User-proposed threads: arcs between named events in amber. We pick the
+  // first hit target matching each title, so if the event sits on multiple
+  // tracks the thread anchors to whichever one was rendered first.
+  if (proposedThreads && proposedThreads.length > 0) {
+    const byTitle = new Map<string, { x: number; y: number }>();
+    for (const ht of hitTargets) {
+      if (!byTitle.has(ht.event.title)) byTitle.set(ht.event.title, { x: ht.x, y: ht.y });
+    }
+    drawProposedThreads(ctx, proposedThreads, byTitle, vp, W);
+  }
+
   return hitTargets;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Proposed threads (user hypotheses, AI-validated)                   */
+/* ------------------------------------------------------------------ */
+
+function drawProposedThreads(
+  ctx: CanvasRenderingContext2D,
+  threads: ProposedThread[],
+  byTitle: Map<string, { x: number; y: number }>,
+  vp: Viewport,
+  W: number,
+) {
+  const AMBER = '#f6b73c';
+  for (const t of threads) {
+    const from = byTitle.get(t.fromTitle) || (t.fromYear != null ? { x: yearToPixel(t.fromYear, vp, W), y: 80 } : undefined);
+    const to = byTitle.get(t.toTitle) || (t.toYear != null ? { x: yearToPixel(t.toYear, vp, W), y: 80 } : undefined);
+    if (!from || !to) continue;
+
+    // Skip if both endpoints are off-screen.
+    if ((from.x < -60 && to.x < -60) || (from.x > W + 60 && to.x > W + 60)) continue;
+
+    const opacity = t.confidence === 'high' ? 'dd' : t.confidence === 'medium' ? 'aa' : '70';
+    ctx.strokeStyle = AMBER + opacity;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    const midX = (from.x + to.x) / 2;
+    const arcHeight = Math.max(40, Math.abs(to.x - from.x) * 0.12);
+    const midY = Math.min(from.y, to.y) - arcHeight;
+    ctx.quadraticCurveTo(midX, midY, to.x, to.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Small amber dot at each endpoint to mark the anchor.
+    for (const pt of [from, to]) {
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = AMBER + 'cc';
+      ctx.fill();
+    }
+
+    // Label on the arc apex.
+    if (t.label) {
+      ctx.font = 'italic 10px "Fraunces", "Iowan Old Style", Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = AMBER + 'ee';
+      ctx.fillText(t.label, midX, midY - 4);
+      ctx.shadowBlur = 0;
+    }
+  }
 }
 

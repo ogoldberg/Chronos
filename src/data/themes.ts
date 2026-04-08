@@ -22,6 +22,13 @@ export interface TimelineTheme {
   color: string;
   /** Lowercase substrings searched against title / description / category. */
   tags: string[];
+  /** User-authored themes carry this flag so the UI can show a delete action. */
+  custom?: boolean;
+  /**
+   * Long-form description, used as prompt context when a custom theme is
+   * sent to /api/lens/discover. Built-in themes don't need one.
+   */
+  description?: string;
 }
 
 /**
@@ -115,16 +122,67 @@ export const THEMES_BY_ID: Record<string, TimelineTheme> = Object.fromEntries(
  * Return the ids of every theme a given event matches. Events often match
  * several — the Manhattan Project is science *and* war *and* tech — and
  * that overlap is exactly what "convergence" visualizes.
+ *
+ * When the event carries a `themeHint` set (custom theme discovery path),
+ * that theme is always included if it's in the active list — otherwise an
+ * AI-discovered "architecture of sound" event might fail keyword matching
+ * against its own theme tags and drop off the track it was fetched for.
  */
 export function getEventThemes(ev: TimelineEvent, themes: TimelineTheme[] = THEMES): string[] {
   const haystack = `${ev.title} ${ev.description} ${ev.category}`.toLowerCase();
   const matches: string[] = [];
+  const hint = ev.themeHint;
   for (const theme of themes) {
-    if (theme.tags.some(tag => haystack.includes(tag))) {
+    if (hint && theme.id === hint) {
+      matches.push(theme.id);
+      continue;
+    }
+    if (theme.tags.length > 0 && theme.tags.some(tag => haystack.includes(tag))) {
       matches.push(theme.id);
     }
   }
   return matches;
+}
+
+/**
+ * Build a `TimelineTheme` from a user-supplied label + description +
+ * optional tag string. Id is a stable slug prefixed with `custom-` so
+ * custom themes never collide with built-ins. Missing fields get sane
+ * defaults (random color, magnifying-glass emoji, empty tag list).
+ */
+export function makeCustomTheme(input: {
+  label: string;
+  description?: string;
+  emoji?: string;
+  color?: string;
+  tags?: string[];
+  id?: string;
+}): TimelineTheme {
+  const slug = input.label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const id = input.id || `custom-${slug || Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    label: input.label.trim() || 'Untitled thread',
+    emoji: input.emoji || '✨',
+    color: input.color || '#14b8a6',
+    tags: (input.tags || []).map(t => t.toLowerCase().trim()).filter(Boolean),
+    description: input.description?.trim() || '',
+    custom: true,
+  };
+}
+
+/** Merge built-in themes with a list of user-authored themes. */
+export function mergeThemes(custom: TimelineTheme[] = []): TimelineTheme[] {
+  return [...THEMES, ...custom];
+}
+
+/** Resolve a Set of theme ids into a theme list, preserving display order. */
+export function resolveActiveThemes(
+  ids: Set<string>,
+  custom: TimelineTheme[] = [],
+): TimelineTheme[] {
+  const all = mergeThemes(custom);
+  return all.filter(t => ids.has(t.id));
 }
 
 /**
@@ -142,15 +200,20 @@ export interface Convergence {
  * Scan a list of events and return every event that matches ≥2 active
  * themes. Only events inside `activeThemes` are considered — we never
  * report a convergence that the user can't see.
+ *
+ * `themes` defaults to the built-in registry; pass a merged list when
+ * custom user-authored themes are in play so they participate in
+ * convergence detection alongside the built-ins.
  */
 export function findMultiThemeConvergences(
   events: TimelineEvent[],
   activeThemes: Set<string>,
+  themes: TimelineTheme[] = THEMES,
 ): Convergence[] {
   if (activeThemes.size < 2) return [];
   const out: Convergence[] = [];
   for (const ev of events) {
-    const themeIds = getEventThemes(ev).filter(id => activeThemes.has(id));
+    const themeIds = getEventThemes(ev, themes).filter(id => activeThemes.has(id));
     if (themeIds.length >= 2) out.push({ event: ev, themeIds });
   }
   return out;
@@ -181,12 +244,13 @@ export interface ThreadConvergence {
 export function findThreadConvergences(
   events: TimelineEvent[],
   activeThemes: Set<string>,
+  themes: TimelineTheme[] = THEMES,
 ): ThreadConvergence[] {
   if (activeThemes.size < 2) return [];
   const byId = new Map(events.map(e => [e.id, e]));
   const byTitle = new Map(events.map(e => [e.title, e]));
   const firstActiveTheme = (ev: TimelineEvent): string | null => {
-    for (const id of getEventThemes(ev)) {
+    for (const id of getEventThemes(ev, themes)) {
       if (activeThemes.has(id)) return id;
     }
     return null;

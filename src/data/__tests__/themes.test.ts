@@ -6,6 +6,9 @@ import {
   getEventThemes,
   findMultiThemeConvergences,
   findThreadConvergences,
+  makeCustomTheme,
+  mergeThemes,
+  resolveActiveThemes,
 } from '../themes';
 
 function mk(partial: Partial<TimelineEvent> & { id: string; title: string }): TimelineEvent {
@@ -154,5 +157,93 @@ describe('findThreadConvergences', () => {
     expect(threads).toHaveLength(1);
     expect(threads[0].fromTheme).toBe('tech');
     expect(threads[0].toTheme).toBe('belief');
+  });
+});
+
+describe('makeCustomTheme', () => {
+  it('assigns a custom- prefixed id from the label', () => {
+    const t = makeCustomTheme({ label: 'Influence of Mathematics' });
+    expect(t.id).toBe('custom-influence-of-mathematics');
+    expect(t.custom).toBe(true);
+  });
+
+  it('uses supplied id when editing', () => {
+    const t = makeCustomTheme({ id: 'custom-existing', label: 'Whatever' });
+    expect(t.id).toBe('custom-existing');
+  });
+
+  it('lowercases and dedupes tag whitespace', () => {
+    const t = makeCustomTheme({
+      label: 'test',
+      tags: ['  Gold ', 'ALCHEMY', 'mercury  '],
+    });
+    expect(t.tags).toEqual(['gold', 'alchemy', 'mercury']);
+  });
+
+  it('falls back to defaults for missing fields', () => {
+    const t = makeCustomTheme({ label: 'x' });
+    expect(t.emoji).toBeTruthy();
+    expect(t.color).toMatch(/^#/);
+    expect(t.tags).toEqual([]);
+  });
+});
+
+describe('mergeThemes + resolveActiveThemes', () => {
+  it('merges built-ins with customs preserving order', () => {
+    const custom = makeCustomTheme({ label: 'Color blue' });
+    const merged = mergeThemes([custom]);
+    expect(merged).toHaveLength(THEMES.length + 1);
+    expect(merged[merged.length - 1]).toBe(custom);
+  });
+
+  it('resolves an id set into a theme list (built-in + custom)', () => {
+    const custom = makeCustomTheme({ label: 'Color blue' });
+    const ids = new Set(['science', custom.id]);
+    const resolved = resolveActiveThemes(ids, [custom]);
+    expect(resolved).toHaveLength(2);
+    expect(resolved.map(t => t.id)).toEqual(['science', custom.id]);
+  });
+
+  it('drops unknown ids', () => {
+    const resolved = resolveActiveThemes(new Set(['science', 'not-a-theme']), []);
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].id).toBe('science');
+  });
+});
+
+describe('getEventThemes + themeHint', () => {
+  it('honors themeHint even when tag matching would miss', () => {
+    const custom = makeCustomTheme({ label: 'Color blue', tags: ['ultramarine'] });
+    const ev = mk({
+      id: 'h1',
+      title: 'Lapis lazuli trade',
+      description: 'Afghan stone crossed the silk road',
+      themeHint: custom.id,
+    });
+    const themes = getEventThemes(ev, mergeThemes([custom]));
+    expect(themes).toContain(custom.id);
+  });
+
+  it('still applies normal tag matching when themeHint is set', () => {
+    const custom = makeCustomTheme({ label: 'Color blue', tags: ['pigment'] });
+    const ev = mk({
+      id: 'h2',
+      title: "Newton's Principia",
+      description: 'Physics and mathematics',
+      themeHint: custom.id,
+    });
+    const themes = getEventThemes(ev, mergeThemes([custom]));
+    // Both the hint theme and the built-in science theme should fire.
+    expect(themes).toContain(custom.id);
+    expect(themes).toContain('science');
+  });
+
+  it('a custom theme with no tags only matches via themeHint', () => {
+    const custom = makeCustomTheme({ label: 'Empty theme', tags: [] });
+    const evHint = mk({ id: 'h3', title: 'Random', description: 'random', themeHint: custom.id });
+    const evNoHint = mk({ id: 'h4', title: 'Random', description: 'random' });
+    const themes = mergeThemes([custom]);
+    expect(getEventThemes(evHint, themes)).toContain(custom.id);
+    expect(getEventThemes(evNoHint, themes)).not.toContain(custom.id);
   });
 });
