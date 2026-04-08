@@ -779,8 +779,15 @@ function drawProposedThreads(
 ) {
   const AMBER = '#f6b73c';
   for (const t of threads) {
-    const from = byTitle.get(t.fromTitle) || (t.fromYear != null ? { x: yearToPixel(t.fromYear, vp, W), y: 80 } : undefined);
-    const to = byTitle.get(t.toTitle) || (t.toYear != null ? { x: yearToPixel(t.toYear, vp, W), y: 80 } : undefined);
+    // Only draw a thread when BOTH endpoints anchor to a real rendered
+    // event marker. Earlier code fell back to `{ x: yearToPixel(...), y: 80 }`
+    // when an endpoint wasn't in the current hitTargets map, which put the
+    // fallback point at the top of the canvas — colliding with the editorial
+    // header, and producing diagonal arcs when only one endpoint was real.
+    // Skipping unresolved endpoints keeps the rendering honest: the thread
+    // re-appears once the user pans so both ends are on-screen.
+    const from = byTitle.get(t.fromTitle);
+    const to = byTitle.get(t.toTitle);
     if (!from || !to) continue;
 
     // Skip if both endpoints are off-screen.

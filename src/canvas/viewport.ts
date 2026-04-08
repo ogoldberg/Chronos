@@ -88,9 +88,16 @@ export function pan(vp: Viewport, deltaPx: number, width: number): Viewport {
 }
 
 export function clampViewport(vp: Viewport): Viewport {
-  const span = clamp(vp.span, MIN_SPAN, MAX_SPAN);
+  // Guard against non-finite inputs. Math.min/max propagate NaN, so an
+  // upstream NaN (parseFloat on a malformed URL param, a divide-by-zero
+  // in a zoom calc, etc.) would poison the store and every subsequent
+  // render. Fall back to MAX_SPAN + 0 for pathological values — they'll
+  // immediately get re-clamped to valid bounds by the caller's next action.
+  const rawSpan = Number.isFinite(vp.span) ? vp.span : MAX_SPAN;
+  const rawCenter = Number.isFinite(vp.centerYear) ? vp.centerYear : 0;
+  const span = clamp(rawSpan, MIN_SPAN, MAX_SPAN);
   return {
-    centerYear: clamp(vp.centerYear, MIN_YEAR, maxCenterForSpan(span)),
+    centerYear: clamp(rawCenter, MIN_YEAR, maxCenterForSpan(span)),
     span,
   };
 }

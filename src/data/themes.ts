@@ -129,7 +129,11 @@ export const THEMES_BY_ID: Record<string, TimelineTheme> = Object.fromEntries(
  * against its own theme tags and drop off the track it was fetched for.
  */
 export function getEventThemes(ev: TimelineEvent, themes: TimelineTheme[] = THEMES): string[] {
-  const haystack = `${ev.title} ${ev.description} ${ev.category}`.toLowerCase();
+  // Guard each field with ?? '' — TimelineEvent's description and category
+  // are both optional, and letting the template literal stringify undefined
+  // leaks the literal word "undefined" into the haystack, which could then
+  // false-match any theme tag containing a substring like "fine" or "def".
+  const haystack = `${ev.title ?? ''} ${ev.description ?? ''} ${ev.category ?? ''}`.toLowerCase();
   const matches: string[] = [];
   const hint = ev.themeHint;
   for (const theme of themes) {

@@ -132,8 +132,16 @@ export function useCustomThemeDiscovery({
           })
           .catch((err: unknown) => {
             // Aborted fetches aren't errors — they just mean the user
-            // panned past this cell before it resolved.
-            if (err instanceof DOMException && err.name === 'AbortError') return;
+            // panned past this cell before it resolved. Crucially we
+            // must DELETE the cache entry (not leave it 'pending') so
+            // the next time the user lands on this cell we retry the
+            // fetch. Leaving it 'pending' made the common case (rapid
+            // panning constantly bouncing the debounce) silently stop
+            // loading custom-theme events.
+            if (err instanceof DOMException && err.name === 'AbortError') {
+              cacheRef.current.delete(key);
+              return;
+            }
             cacheRef.current.set(key, 'error');
             // Still-errored cells get one retry window: clear them after
             // 30s so the next viewport visit attempts a fresh fetch.
