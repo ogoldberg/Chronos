@@ -9,6 +9,7 @@ import { useTourStore } from './stores/tourStore';
 import TimelineCanvas from './canvas/TimelineCanvas';
 import EditorialHeader from './components/EditorialHeader';
 import CommandPalette from './components/CommandPalette';
+import ThemedTimelinesControl from './features/themedTimelines/ThemedTimelinesControl';
 import EventCard from './features/events/EventCard';
 import PeriodCard from './features/period/PeriodCard';
 import DatePickerPopover from './components/DatePickerPopover';
@@ -17,6 +18,8 @@ import TourOverlay from './features/tour/TourOverlay';
 import PanelRouter from './components/PanelRouter';
 import OnboardingOverlay, { triggerOnboarding, ShowMeAroundButton } from './features/onboarding/OnboardingOverlay';
 import CursorOverlay from './features/collaboration/CursorOverlay';
+import { resolveActiveThemes } from './data/themes';
+import { useCustomThemeDiscovery } from './features/themedTimelines/useCustomThemeDiscovery';
 import type { TimelineEvent } from './types';
 import './App.css';
 
@@ -36,6 +39,7 @@ export default function App() {
   const setDiscovering = useTimelineStore(s => s.setDiscovering);
   const setCacheStats = useTimelineStore(s => s.setCacheStats);
   const allEvents = useTimelineStore(getAllEvents);
+  const proposedThreads = useTimelineStore(s => s.proposedThreads);
 
   const activePanel = useUIStore(s => s.activePanel);
   const openPanel = useUIStore(s => s.openPanel);
@@ -44,7 +48,27 @@ export default function App() {
   const toggleGlobe = useUIStore(s => s.toggleGlobe);
   const lanesEnabled = useUIStore(s => s.lanesEnabled);
   const activeLanes = useUIStore(s => s.activeLanes);
+  const themedTimelinesEnabled = useUIStore(s => s.themedTimelinesEnabled);
+  const activeThemeIds = useUIStore(s => s.activeThemes);
+  const customThemes = useUIStore(s => s.customThemes);
   const setChatInitMsg = useUIStore(s => s.setChatInitMsg);
+
+  // Resolve active theme ids → concrete theme objects (built-in + custom).
+  // This is what the canvas wants: it never needs to know which are
+  // built-in and which came from the user.
+  const resolvedActiveThemes = useMemo(
+    () => resolveActiveThemes(activeThemeIds, customThemes),
+    [activeThemeIds, customThemes],
+  );
+
+  // Fire AI discovery for custom themes so user-authored tracks fill in
+  // with topic-relevant events as the viewport moves. Built-in themes
+  // don't need this — they re-use the shared event dataset.
+  useCustomThemeDiscovery({
+    enabled: themedTimelinesEnabled,
+    viewport,
+    activeThemes: resolvedActiveThemes,
+  });
 
   const tourStops = useTourStore(s => s.stops);
 
@@ -151,6 +175,8 @@ export default function App() {
         events={allEvents}
         selectedId={selectedEvent?.id ?? null}
         activeLanes={lanesEnabled ? activeLanes : undefined}
+        activeThemes={themedTimelinesEnabled ? resolvedActiveThemes : undefined}
+        proposedThreads={proposedThreads}
         onViewportChange={setViewport}
         onSelectEvent={handleSelectEvent}
         onHoverEvent={setHoveredEvent}
@@ -168,6 +194,9 @@ export default function App() {
         onOpenDatePicker={() => setDatePickerOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
       />
+
+      {/* Parallel themed timelines toggle / theme picker */}
+      <ThemedTimelinesControl />
 
       {/* First-run hint — auto-hides after 5 seconds. */}
       <ScrollHint />

@@ -19,6 +19,26 @@ function defaultViewport(): Viewport {
   });
 }
 
+/**
+ * User-proposed cross-theme connection, validated by the AI.
+ * Lives in memory only — the user can accept/reject each one, and
+ * accepted threads get painted on the canvas as distinct arcs.
+ */
+export interface ProposedThread {
+  id: string;
+  fromTitle: string;
+  toTitle: string;
+  /** Optional hints if the endpoints don't match any visible event. */
+  fromYear?: number;
+  toYear?: number;
+  relationship: string;
+  label: string;
+  explanation: string;
+  confidence: 'high' | 'medium' | 'low';
+  /** The user's hypothesis that produced this thread — shown on hover. */
+  hypothesis: string;
+}
+
 interface TimelineState {
   // Viewport
   viewport: Viewport;
@@ -27,6 +47,13 @@ interface TimelineState {
   // Events
   dynamicEvents: TimelineEvent[];
   addEvents: (events: TimelineEvent[]) => void;
+
+  // User-proposed threads (AI-validated convergences). See
+  // ProposeConvergenceModal for how these are produced.
+  proposedThreads: ProposedThread[];
+  addProposedThreads: (threads: ProposedThread[]) => void;
+  removeProposedThread: (id: string) => void;
+  clearProposedThreads: () => void;
 
   // Selection
   selectedEvent: TimelineEvent | null;
@@ -83,6 +110,19 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     }
     return { dynamicEvents: combined };
   }),
+
+  proposedThreads: [],
+  addProposedThreads: (threads) => set(state => {
+    // Dedupe by (fromTitle|toTitle) so re-asking about the same hypothesis
+    // doesn't stack duplicate arcs.
+    const seen = new Set(state.proposedThreads.map(t => `${t.fromTitle}|${t.toTitle}`));
+    const fresh = threads.filter(t => !seen.has(`${t.fromTitle}|${t.toTitle}`));
+    return { proposedThreads: [...state.proposedThreads, ...fresh] };
+  }),
+  removeProposedThread: (id) => set(state => ({
+    proposedThreads: state.proposedThreads.filter(t => t.id !== id),
+  })),
+  clearProposedThreads: () => set({ proposedThreads: [] }),
 
   selectedEvent: null,
   setSelectedEvent: (ev) => set({ selectedEvent: ev, selectedPeriod: ev ? null : get().selectedPeriod }),

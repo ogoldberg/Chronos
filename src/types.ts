@@ -45,6 +45,13 @@ export interface TimelineEvent {
 
   // Connections to other events (causality, influence, etc.)
   connections?: EventConnection[];
+
+  // Themed timelines hint — when an event is dynamically discovered for a
+  // user-defined custom theme (via /api/lens/discover), we tag it with the
+  // theme id so the parallel-tracks renderer places it on the right track
+  // even if the tag-based matcher would otherwise miss it. Built-in themes
+  // never use this field — they match purely on tags.
+  themeHint?: string;
 }
 
 export interface Citation {

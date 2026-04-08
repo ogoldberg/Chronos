@@ -1,5 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import type { TimelineEvent, Viewport } from '../types';
+import type { TimelineTheme } from '../data/themes';
+import type { ProposedThread } from '../stores/timelineStore';
 import { zoomAtCursor, pan, pixelToYear } from './viewport';
 import { renderTimeline, type HitTarget } from './renderer';
 
@@ -8,6 +10,10 @@ interface Props {
   events: TimelineEvent[];
   selectedId: string | null;
   activeLanes?: Set<string>;
+  /** Resolved list of active themed tracks (built-in + custom). */
+  activeThemes?: TimelineTheme[];
+  /** AI-validated user-proposed convergences, drawn as distinct arcs. */
+  proposedThreads?: ProposedThread[];
   onViewportChange: (vp: Viewport) => void;
   onSelectEvent: (ev: TimelineEvent | null) => void;
   onHoverEvent: (ev: TimelineEvent | null) => void;
@@ -21,6 +27,8 @@ export default function TimelineCanvas({
   events,
   selectedId,
   activeLanes,
+  activeThemes,
+  proposedThreads,
   onViewportChange,
   onSelectEvent,
   onHoverEvent,
@@ -77,8 +85,10 @@ export default function TimelineCanvas({
       hoveredId,
       selectedId,
       activeLanes,
+      activeThemes,
+      proposedThreads,
     );
-  }, [viewport, events, dims, hoveredId, selectedId, activeLanes]);
+  }, [viewport, events, dims, hoveredId, selectedId, activeLanes, activeThemes, proposedThreads]);
 
   // Wheel zoom
   const onWheel = useCallback(

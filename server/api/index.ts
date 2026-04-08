@@ -33,6 +33,7 @@ import { registerPublicApiRoutes } from './routes/publicApi';
 import { registerFiguresRoutes } from './routes/figures';
 import { registerReadingRoutes } from './routes/reading';
 import { registerSourcesRoutes } from './routes/sources';
+import { registerThreadsRoutes } from './routes/threads';
 
 export { handleStreamRequest };
 
@@ -100,6 +101,7 @@ registerPublicApiRoutes(handleRoute, isDbReady);
 registerFiguresRoutes(handleRoute);
 registerReadingRoutes(handleRoute);
 registerSourcesRoutes(handleRoute);
+registerThreadsRoutes(handleRoute);
 
 // ── Request dispatcher ───────────────────────────────────────────────
 

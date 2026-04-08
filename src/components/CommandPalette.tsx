@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PanelId } from '../stores/uiStore';
+import { useUIStore } from '../stores/uiStore';
 
 /**
  * A single command the user can run from the palette. `keywords` are
@@ -61,9 +62,11 @@ export default function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const toggleThemedTimelines = useUIStore(s => s.toggleThemedTimelines);
+
   const commands = useMemo<Command[]>(
-    () => buildCommands({ openPanel, toggleGlobe, openDatePicker }),
-    [openPanel, toggleGlobe, openDatePicker],
+    () => buildCommands({ openPanel, toggleGlobe, openDatePicker, toggleThemedTimelines }),
+    [openPanel, toggleGlobe, openDatePicker, toggleThemedTimelines],
   );
 
   // Apply the query filter, preserving group order so the result list
@@ -415,10 +418,12 @@ function buildCommands({
   openPanel,
   toggleGlobe,
   openDatePicker,
+  toggleThemedTimelines,
 }: {
   openPanel: (panel: PanelId) => void;
   toggleGlobe: () => void;
   openDatePicker: () => void;
+  toggleThemedTimelines: () => void;
 }): Command[] {
   // Helper that returns a `run` function which opens a given panel.
   const open = (panel: PanelId) => () => openPanel(panel);
@@ -508,6 +513,14 @@ function buildCommands({
       group: 'explore',
       keywords: ['compare', 'lanes', 'world'],
       run: open('comparison'),
+    },
+    {
+      id: 'parallel-threads',
+      label: 'Parallel themed timelines',
+      hint: 'Weave science, art, war & more',
+      group: 'explore',
+      keywords: ['threads', 'parallel', 'theme', 'tracks', 'converge', 'weave'],
+      run: toggleThemedTimelines,
     },
     {
       id: 'timelapse',
