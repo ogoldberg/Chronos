@@ -51,7 +51,12 @@ export function writeURLState(
   window.history.replaceState(null, '', url);
 }
 
-function formatNum(n: number): string {
+// Exported for tests. The precision of this function is load-bearing for
+// the "max zoom out" case — the default viewport has center ≈ -7e9 with
+// a tiny fractional offset that places the right edge exactly at present
+// day, and losing that offset (as toExponential(2) did) shifts the right
+// edge all the way back to year 0.
+export function formatNum(n: number): string {
   // Years are conceptually integers — encoding fractional years in the URL
   // is pointless, and losing the 2026-year offset between "clamped max center"
   // and a rounded exponential like -7.00e+9 means the right edge of the
