@@ -325,13 +325,16 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
       if (verified.length === candidates.length) {
         sources = candidates.filter((_, i) => {
           const v = verified[i];
-          if (!v.reachable) {
-            metrics.verifierDropped++;
-            metrics.verifierUnreachable++;
-            return false;
-          }
+          // `verified` is the authoritative flag — Unbrowser's
+          // /v1/verify treats reachability as one of its gates,
+          // so a failed reach already flips `verified` to false.
+          // We keep `reachable` as a SUB-metric to distinguish
+          // "broken URL" drops from "mismatched content" drops
+          // in the observability counters, but the keep/drop
+          // decision is driven by `verified` alone.
           if (!v.verified) {
             metrics.verifierDropped++;
+            if (!v.reachable) metrics.verifierUnreachable++;
             return false;
           }
           return true;
