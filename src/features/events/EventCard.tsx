@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { TimelineEvent, WikiData, Citation } from '../../types';
 import { formatYear } from '../../utils/format';
 import { fetchWikiSummary } from '../../services/wikipediaApi';
-import { searchWikisource, type SourceDocument } from '../../services/wikisourceApi';
+import { fetchPrimarySources } from '../../services/primarySources';
+import type { PrimarySource } from '../../types';
 import { factCheckEvent, type FactCheckResult } from '../../services/factCheck';
 import { verifyCitations } from '../../services/citationVerifier';
 import EventVoting from './EventVoting';
@@ -33,7 +34,7 @@ const EVENT_ACTION_STYLE: React.CSSProperties = {
 export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [wiki, setWiki] = useState<WikiData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sources, setSources] = useState<SourceDocument[]>([]);
+  const [sources, setSources] = useState<PrimarySource[]>([]);
   const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null);
   const [verifiedCitations, setVerifiedCitations] = useState<Citation[]>([]);
   // Wikipedia section expanded state. When collapsed we clamp the extract
@@ -56,12 +57,13 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         .then(setFactCheck)
         .catch(() => {});
     }
-    if (event.year > -3000) {
-      searchWikisource(event.title)
-        .then(setSources)
-        .catch(() => {});
-    }
-  }, [event.wiki, event.title, event.year, event.source, event.description, event.citations]);
+    // Primary-source discovery. `fetchPrimarySources` handles curated
+    // events, sentinel short-circuit, prehistoric short-circuit, and the
+    // AI-backed discovery path internally — we just fire and forget.
+    fetchPrimarySources(event)
+      .then(setSources)
+      .catch(() => setSources([]));
+  }, [event, event.wiki, event.title, event.year, event.source, event.description, event.citations]);
 
   const [imgLoaded, setImgLoaded] = useState(false);
 
@@ -503,7 +505,11 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
-        {/* Primary Sources */}
+        {/* Primary Sources — hidden entirely when the discovery pipeline
+            returns [], which is the right answer for sentinel events,
+            prehistoric events, and anything the AI couldn't verify. No
+            empty header, no "no sources found" message — absence is
+            honest. */}
         {sources.length > 0 && (
           <div style={{
             background: 'rgba(255,255,255,0.04)',
@@ -529,10 +535,22 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
                   fontSize: 12,
                 }}
               >
-                <div style={{ fontWeight: 500 }}>📜 {src.title}</div>
-                {src.extract && (
-                  <div style={{ color: '#ffffff60', fontSize: 11, marginTop: 2, lineHeight: 1.4 }}>
-                    {src.extract.slice(0, 100)}...
+                <div style={{ fontWeight: 500 }}>
+                  📜 {src.title}
+                  {src.year !== undefined && (
+                    <span style={{ color: '#ffffff45', fontWeight: 400, marginLeft: 6 }}>
+                      ({src.year < 0 ? `${Math.abs(src.year)} BCE` : src.year})
+                    </span>
+                  )}
+                </div>
+                {(src.author || src.type) && (
+                  <div style={{ color: '#ffffff50', fontSize: 10, marginTop: 2 }}>
+                    {[src.author, src.type].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+                {src.relevance && (
+                  <div style={{ color: '#ffffff60', fontSize: 11, marginTop: 2, lineHeight: 1.4, fontStyle: 'italic' }}>
+                    {src.relevance}
                   </div>
                 )}
               </a>

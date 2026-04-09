@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { TimelineEvent, Viewport } from '../types';
 import { ANCHOR_EVENTS } from '../data/anchorEvents';
-import { clamp } from '../utils/format';
 import { readURLState } from '../utils/urlState';
 import { nowYear, clampViewport } from '../canvas/viewport';
 

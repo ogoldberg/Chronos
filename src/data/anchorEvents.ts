@@ -62,7 +62,9 @@ export const ANCHOR_EVENTS: TimelineEvent[] = ([
   { id:'a-genome', year:2003, title:"Human Genome", emoji:"🧬", color:"#00bfff", desc:"3 billion base pairs mapped. Medicine will never be the same.", maxSpan:0.05, category:'modern', wiki:"Human_Genome_Project", lat:38.9897, lng:-77.1003, geoType:'point' },
   { id:'a-iphone', year:2007, title:"iPhone", emoji:"📱", color:"#a9a9a9", desc:"Smartphone revolution. 4 billion carry one within a decade.", maxSpan:0.05, category:'modern', wiki:"IPhone", lat:37.3318, lng:-122.0312, geoType:'point' },
   { id:'a-ai', year:2022, title:"AI Revolution", emoji:"🤖", color:"#00bfff", desc:"LLMs go mainstream. Generative AI transforms everything.", maxSpan:0.02, category:'modern', wiki:"ChatGPT", lat:37.7749, lng:-122.4194, geoType:'point' },
-  { id:'a-present', year:2025, title:"Present Day", emoji:"📍", color:"#ff1493", desc:"You are here. 13.8 billion years led to this moment.", maxSpan:0.01, category:'modern' },
+  // Sentinel marker, not a real event — no primary sources will ever
+  // apply. Marked explicitly so the sources pipeline short-circuits.
+  { id:'a-present', year:2025, title:"Present Day", emoji:"📍", color:"#ff1493", desc:"You are here. 13.8 billion years led to this moment.", maxSpan:0.01, category:'modern', sourceClass:'sentinel' },
 ] as RawEvent[]).map(e => ({ ...e, description: e.desc, source: 'anchor' as const }));
 
 // Add curated connections between anchor events

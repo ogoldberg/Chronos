@@ -52,6 +52,48 @@ export interface TimelineEvent {
   // even if the tag-based matcher would otherwise miss it. Built-in themes
   // never use this field — they match purely on tags.
   themeHint?: string;
+
+  // ── Primary-source discovery ────────────────────────────────────────
+  // Classifies what *kind* of thing this event is, for the purposes of
+  // sourcing. Controls whether primary-source discovery runs at all, and
+  // what the AI discovery prompt is allowed to return. Determined by the
+  // classifyEvent() helper if not explicitly set.
+  //
+  //  sentinel    — meta-markers like "Present Day", "You are here". Never
+  //                have primary sources. Classifier or UI must never
+  //                attempt discovery for these.
+  //  prehistoric — events before written history (~10000 BCE). Primary
+  //                "sources" are scientific/archaeological, not
+  //                historiographic. Discovery skipped by default.
+  //  scientific  — scientific discoveries/publications. The primary
+  //                source is the original paper / observation record.
+  //  cultural    — works of art, literature, music. The work itself IS
+  //                the primary source.
+  //  historical  — default for everything else in written history.
+  sourceClass?: 'sentinel' | 'prehistoric' | 'scientific' | 'cultural' | 'historical';
+
+  // Curated primary sources for headline events. When present, these are
+  // used verbatim and the AI discovery path is skipped entirely. Empty
+  // array explicitly means "no sources exist" (distinct from undefined
+  // which means "ask the discovery pipeline").
+  primarySources?: PrimarySource[];
+}
+
+/**
+ * A primary source document — a letter, newspaper article, court record,
+ * scientific paper, chronicle, etc. that was created AT OR NEAR the time
+ * of the event by someone with direct knowledge. NOT a modern biography,
+ * history book, play, or novel inspired by the event.
+ */
+export interface PrimarySource {
+  title: string;
+  url: string;
+  /** Year the source was created, NOT the event year. */
+  year?: number;
+  author?: string;
+  type?: 'letter' | 'newspaper' | 'official' | 'witness-account' | 'scientific-paper' | 'legal-document' | 'chronicle' | 'other';
+  /** One-sentence explanation of why this is a primary source for THIS event. */
+  relevance?: string;
 }
 
 export interface Citation {

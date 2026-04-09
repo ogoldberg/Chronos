@@ -502,3 +502,69 @@ export function DIFFICULTY_CONTEXT(level: 'kids' | 'standard' | 'advanced' | 're
       return 'AUDIENCE LEVEL: Academic/Research. Cite specific scholars, use academic terminology, note ongoing debates in the field.';
   }
 }
+
+/**
+ * Primary source discovery — the strict version. The predecessor to this
+ * route did a naive full-text search on the event title against Wikisource
+ * and returned anything that matched. For "Present Day" it dutifully
+ * returned George Bernard Shaw's 1921 play "The Gospel of the Brothers
+ * Barnabas: Present Day" and a 1905 essay called "The Negro's Place in
+ * American Life at the Present Day" — both useless as primary sources for
+ * the sentinel marker at year 2025.
+ *
+ * This prompt enforces the historiographic definition of a primary source
+ * and requires web-search verification. It is ALLOWED to return an empty
+ * array when no genuine primary sources apply — that's the right answer
+ * for many events and much preferable to fabricating.
+ */
+export function PRIMARY_SOURCES_SYSTEM(
+  title: string,
+  year: number,
+  description: string | undefined,
+  sourceClass: 'historical' | 'scientific' | 'cultural',
+): string {
+  const yearStr = year < 0 ? `${Math.abs(year)} BCE` : `${year} CE`;
+
+  const classGuidance = {
+    historical: `This is a HISTORICAL event. Primary sources are documents created at or near the time (within a few decades at most for pre-modern events, within days-to-years for modern events) by people with direct knowledge or participation. Good: letters, diaries, newspaper articles, court records, treaties, royal proclamations, contemporary chronicles, witness accounts, legal documents, official reports. Bad: modern biographies, history books, novels, plays, films, encyclopedia entries, Wikipedia articles.`,
+    scientific: `This is a SCIENTIFIC event (discovery, publication, observation). The primary source is the ORIGINAL research paper, observation log, or announcement — not textbooks or popular science articles about it. Prefer: the original journal article (with DOI if possible), lab notebooks, original dataset, the press release from the institution at the time, the Nobel committee citation, etc.`,
+    cultural: `This is a CULTURAL event (work of art, literature, music, film, etc.). The work ITSELF is typically the primary source. Return the canonical text/score/recording/print if it's online in the public domain (Project Gutenberg, IMSLP, Wikisource original language, Internet Archive). Also valid: contemporary reviews from when the work was released, the creator's own letters or diary about the work.`,
+  }[sourceClass];
+
+  return `You are a historiography expert helping identify PRIMARY SOURCES for a specific event on a timeline.
+
+EVENT: "${title}"
+YEAR: ${yearStr}
+${description ? `CONTEXT: ${description}\n` : ''}SOURCE CLASS: ${sourceClass}
+
+${classGuidance}
+
+CRITICAL RULES (violating any of these is a failure):
+
+1. TEMPORAL ANCHORING. Every source you return must be temporally anchored to the event. For historical/scientific events, the source must have been created close to the event's year (${yearStr}). A document from centuries later is NOT a primary source no matter how much it talks about the event.
+
+2. NEVER NAME-MATCH. Do not return documents just because their title contains words from the event title. If the event is "Present Day" do not return "The Gospel of the Brothers Barnabas: Present Day" — that is a 1921 Bernard Shaw play, completely unrelated to any 2025 moment. If the event is "Revolution" do not return every book with "Revolution" in its title.
+
+3. VERIFY VIA WEB SEARCH. Use web search to verify (a) that the source exists at the URL you cite, (b) that it was created around the claimed year, and (c) that it has a genuine connection to this specific event — not merely a linguistic overlap.
+
+4. EMPTY IS BETTER THAN WRONG. If you can't find real primary sources — because the event is too recent, too obscure, too ancient, or simply has no surviving contemporary record — return an empty array. An empty result is the right answer for many events. NEVER fabricate URLs or invent sources to fill space.
+
+5. NO MODERN COMMENTARY. Do not return Wikipedia articles, Encyclopedia Britannica entries, modern history textbooks, podcasts, documentaries, YouTube videos, or academic journal articles written centuries after the event. These are secondary/tertiary sources even if they quote primary sources.
+
+6. PREFER PUBLIC DOMAIN. When multiple valid candidates exist, prefer ones with stable public-domain URLs: Wikisource, Project Gutenberg, Internet Archive, Library of Congress, national archives, institutional repositories, DOI.org.
+
+OUTPUT: Respond with ONLY a JSON object. No prose, no markdown fences, no commentary. Cap the array at 5 items. Empty array is valid.
+
+{
+  "sources": [
+    {
+      "title": "Exact title of the source document",
+      "url": "Direct URL to the source (verified via web search)",
+      "year": 1789,
+      "author": "Author name if known, null otherwise",
+      "type": "letter" | "newspaper" | "official" | "witness-account" | "scientific-paper" | "legal-document" | "chronicle" | "other",
+      "relevance": "One sentence explaining why this is a primary source for THIS specific event, with the temporal connection made explicit."
+    }
+  ]
+}`;
+}
