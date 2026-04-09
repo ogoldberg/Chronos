@@ -31,6 +31,19 @@ export interface AIProviderConfig {
   webSearch?: boolean;
 }
 
+/**
+ * Per-call options. `model` is a provider-specific model ID override that
+ * lets individual routes pick a different (usually cheaper + faster) model
+ * for their specific use case without changing the global config. Useful
+ * for narrow tasks like primary-source discovery where Haiku-tier quality
+ * is plenty and per-call cost matters at scale.
+ */
+export interface AIChatOptions {
+  maxTokens?: number;
+  webSearch?: boolean;
+  model?: string;
+}
+
 export interface AIProvider {
   readonly name: string;
 
@@ -40,7 +53,7 @@ export interface AIProvider {
   chat(
     system: string,
     messages: AIMessage[],
-    options?: { maxTokens?: number; webSearch?: boolean },
+    options?: AIChatOptions,
   ): Promise<AIResponse>;
 
   /**
@@ -51,6 +64,6 @@ export interface AIProvider {
     system: string,
     messages: AIMessage[],
     onToken: (token: string) => void,
-    options?: { maxTokens?: number; webSearch?: boolean },
+    options?: AIChatOptions,
   ): Promise<AIResponse>;
 }

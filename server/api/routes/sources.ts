@@ -160,11 +160,27 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     // surface area.
     const userMessage = `Find primary sources for: ${title} (${year < 0 ? `${Math.abs(year)} BCE` : `${year} CE`})`;
 
+    // Per-endpoint model override. Primary source discovery is a narrow,
+    // JSON-structured reasoning task with web search — Haiku 4.5 handles
+    // it at roughly 1/3 the cost of Sonnet with comparable quality per
+    // Anthropic's benchmarks and third-party comparisons. The provider
+    // abstraction supports per-call overrides via the `model` option, so
+    // other routes keep whatever model the user configured globally.
+    //
+    // Override via env if you want to force Sonnet (or switch providers):
+    //   AI_SOURCES_MODEL=claude-sonnet-4-6-20251001
+    // The default is provider-specific and picks a sensible cheap-tier
+    // model when we can infer the provider, otherwise it just passes
+    // undefined and the provider's global default wins.
+    const modelOverride = process.env.AI_SOURCES_MODEL
+      || (ai.name === 'anthropic' ? 'claude-haiku-4-5-20251001' : undefined);
+
     let raw: string;
     try {
       const resp = await ai.chat(system, [{ role: 'user', content: userMessage }], {
         maxTokens: 2000,
         webSearch: true,
+        model: modelOverride,
       });
       raw = resp.text;
     } catch (err: unknown) {

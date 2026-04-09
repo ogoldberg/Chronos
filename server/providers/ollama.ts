@@ -1,4 +1,4 @@
-import type { AIProvider, AIMessage, AIResponse, AIProviderConfig } from './types';
+import type { AIProvider, AIMessage, AIResponse, AIProviderConfig, AIChatOptions } from './types';
 
 /**
  * Ollama provider — uses the OpenAI-compatible API that Ollama exposes.
@@ -19,13 +19,13 @@ export class OllamaProvider implements AIProvider {
   async chat(
     system: string,
     messages: AIMessage[],
-    options?: { maxTokens?: number },
+    options?: AIChatOptions,
   ): Promise<AIResponse> {
     const resp = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: this.model,
+        model: options?.model || this.model,
         stream: false,
         options: {
           num_predict: options?.maxTokens || this.maxTokens,
@@ -49,13 +49,13 @@ export class OllamaProvider implements AIProvider {
     system: string,
     messages: AIMessage[],
     onToken: (token: string) => void,
-    options?: { maxTokens?: number },
+    options?: AIChatOptions,
   ): Promise<AIResponse> {
     const resp = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: this.model,
+        model: options?.model || this.model,
         stream: true,
         options: { num_predict: options?.maxTokens || this.maxTokens },
         messages: [

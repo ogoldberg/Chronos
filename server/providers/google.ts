@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { AIProvider, AIMessage, AIResponse, AIProviderConfig } from './types';
+import type { AIProvider, AIMessage, AIResponse, AIProviderConfig, AIChatOptions } from './types';
 
 export class GoogleProvider implements AIProvider {
   readonly name = 'google';
@@ -17,10 +17,10 @@ export class GoogleProvider implements AIProvider {
   async chat(
     system: string,
     messages: AIMessage[],
-    options?: { maxTokens?: number },
+    options?: AIChatOptions,
   ): Promise<AIResponse> {
     const model = this.genAI.getGenerativeModel({
-      model: this.model,
+      model: options?.model || this.model,
       systemInstruction: system,
       generationConfig: {
         maxOutputTokens: options?.maxTokens || this.maxTokens,
@@ -44,10 +44,10 @@ export class GoogleProvider implements AIProvider {
     system: string,
     messages: AIMessage[],
     onToken: (token: string) => void,
-    options?: { maxTokens?: number },
+    options?: AIChatOptions,
   ): Promise<AIResponse> {
     const model = this.genAI.getGenerativeModel({
-      model: this.model,
+      model: options?.model || this.model,
       systemInstruction: system,
       generationConfig: {
         maxOutputTokens: options?.maxTokens || this.maxTokens,
