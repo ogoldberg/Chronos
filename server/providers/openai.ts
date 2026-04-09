@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { AIProvider, AIMessage, AIResponse, AIProviderConfig } from './types';
+import type { AIProvider, AIMessage, AIResponse, AIProviderConfig, AIChatOptions } from './types';
 
 export class OpenAIProvider implements AIProvider {
   readonly name = 'openai';
@@ -21,14 +21,15 @@ export class OpenAIProvider implements AIProvider {
   async chat(
     system: string,
     messages: AIMessage[],
-    options?: { maxTokens?: number; webSearch?: boolean },
+    options?: AIChatOptions,
   ): Promise<AIResponse> {
     const useWebSearch = options?.webSearch ?? this.webSearch;
+    const model = options?.model || this.model;
 
     // OpenAI Responses API with web search tool
-    if (useWebSearch && this.supportsWebSearch()) {
+    if (useWebSearch && this.supportsWebSearch(model)) {
       const resp = await this.client.responses.create({
-        model: this.model,
+        model,
         instructions: system,
         tools: [{ type: 'web_search_preview' as any }],
         input: messages.map(m => ({
@@ -49,7 +50,7 @@ export class OpenAIProvider implements AIProvider {
 
     // Standard Chat Completions API
     const resp = await this.client.chat.completions.create({
-      model: this.model,
+      model,
       max_tokens: options?.maxTokens || this.maxTokens,
       messages: [
         { role: 'system', content: system },
@@ -67,10 +68,10 @@ export class OpenAIProvider implements AIProvider {
     system: string,
     messages: AIMessage[],
     onToken: (token: string) => void,
-    options?: { maxTokens?: number },
+    options?: AIChatOptions,
   ): Promise<AIResponse> {
     const stream = await this.client.chat.completions.create({
-      model: this.model,
+      model: options?.model || this.model,
       max_tokens: options?.maxTokens || this.maxTokens,
       stream: true,
       messages: [
@@ -93,8 +94,9 @@ export class OpenAIProvider implements AIProvider {
     return { text: fullText };
   }
 
-  private supportsWebSearch(): boolean {
+  private supportsWebSearch(model?: string): boolean {
     // Web search is available on gpt-4o and similar models
-    return this.model.startsWith('gpt-4') || this.model.startsWith('o');
+    const m = model || this.model;
+    return m.startsWith('gpt-4') || m.startsWith('o') || m.startsWith('gpt-5');
   }
 }

@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ChatMessage, Viewport, TimelineEvent, TourStop } from '../../types';
 import { formatYear, formatYearShort, scaleLabel } from '../../utils/format';
 import { speak, stopSpeech, isSpeaking } from '../../utils/speech';
@@ -12,6 +14,13 @@ interface Props {
   onStartTour: (stops: TourStop[]) => void;
   onAddEvents: (events: TimelineEvent[]) => void;
   initialMessage?: string;
+  /**
+   * Closes the chat from the parent's perspective. ChatPanel used to manage
+   * its own visibility via an internal `open` flag and a floating launcher
+   * button — but now the parent (PanelRouter) controls when the component is
+   * mounted, so the X button needs a way to ask the parent to unmount it.
+   */
+  onClose?: () => void;
 }
 
 const QUICK_PROMPTS = [
@@ -22,6 +31,105 @@ const QUICK_PROMPTS = [
   "Go deeper — PhD level",
 ];
 
+/**
+ * Remove chat-control tags from visible assistant text.
+ *
+ * The model emits inline directives like `[[GOTO:year,span]]`,
+ * `[[EVENTS:[...]]]`, and `[[TOUR:[...]]]` for the frontend to execute. These
+ * must never be rendered to the user. This runs on every streamed-token
+ * update so the raw tags never flash into the UI mid-stream, and also on
+ * the final content pass.
+ *
+ * To robustly strip `[[TOUR:...]]` and `[[EVENTS:...]]` — both of which
+ * contain a nested JSON array that may embed arbitrary brackets — we scan
+ * manually and match brackets rather than rely on a single regex, which
+ * would fail on nested structures. Incomplete trailing tags (the tail end
+ * of a stream where the closing `]]` hasn't arrived yet) are stripped too.
+ */
+function stripControlTags(text: string): string {
+  let out = text;
+  // Simple directive: [[GOTO:number,number]] (no nesting)
+  out = out.replace(/\[\[GOTO:[^\]]*\]\]/g, '');
+
+  // Nesting-aware stripping for EVENTS / TOUR
+  for (const tag of ['EVENTS', 'TOUR'] as const) {
+    const marker = `[[${tag}:`;
+    let idx = out.indexOf(marker);
+    while (idx !== -1) {
+      // Walk from the inner `[` after `tag:` and count matching brackets.
+      const bracketStart = out.indexOf('[', idx + marker.length - 1);
+      if (bracketStart === -1) {
+        // Incomplete tag at end of stream — truncate from here.
+        out = out.slice(0, idx).trimEnd();
+        break;
+      }
+      let depth = 0;
+      let end = -1;
+      let inString = false;
+      let escape = false;
+      for (let i = bracketStart; i < out.length; i++) {
+        const ch = out[i];
+        if (escape) { escape = false; continue; }
+        if (ch === '\\') { escape = true; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (ch === '[') depth++;
+        else if (ch === ']') {
+          depth--;
+          if (depth === 0) { end = i; break; }
+        }
+      }
+      if (end === -1) {
+        // Array never closed — truncate from the tag onward.
+        out = out.slice(0, idx).trimEnd();
+        break;
+      }
+      // Consume any trailing `]` characters that belong to the tag's closing
+      // `]]`. The model usually emits exactly two, but we tolerate one or
+      // three so a minor formatting slip doesn't leave orphan brackets.
+      let tail = end + 1;
+      let extras = 0;
+      while (extras < 2 && out[tail] === ']') { tail++; extras++; }
+      out = out.slice(0, idx) + out.slice(tail);
+      idx = out.indexOf(marker);
+    }
+  }
+  // Collapse any stray double-spaces we left behind.
+  return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+}
+
+/**
+ * Extract the JSON array payload from a `[[TAG:[...]]]` control directive
+ * using the same bracket-aware scanner as `stripControlTags`. Returns the
+ * raw JSON string (e.g. `[{...},{...}]`) or null if the tag isn't present
+ * or is malformed/incomplete.
+ */
+function extractTag(text: string, tag: 'EVENTS' | 'TOUR'): string | null {
+  const marker = `[[${tag}:`;
+  const idx = text.indexOf(marker);
+  if (idx === -1) return null;
+  const bracketStart = text.indexOf('[', idx + marker.length - 1);
+  if (bracketStart === -1) return null;
+  let depth = 0;
+  let end = -1;
+  let inString = false;
+  let escape = false;
+  for (let i = bracketStart; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '[') depth++;
+    else if (ch === ']') {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) return null;
+  return text.slice(bracketStart, end + 1);
+}
+
 export default function ChatPanel({
   viewport,
   visibleEvents,
@@ -30,8 +138,13 @@ export default function ChatPanel({
   onStartTour,
   onAddEvents,
   initialMessage,
+  onClose,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  // Always-open by default: the parent decides when to mount the chat now,
+  // so we no longer need an internal closed state. The state is kept (rather
+  // than removed entirely) so older internal callers like setOpen(true) on
+  // initialMessage continue to compile, but it never has any visible effect.
+  const [open, setOpen] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
@@ -124,10 +237,15 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
               const data = JSON.parse(line.slice(6));
               if (data.token) {
                 content += data.token;
-                // Update the streaming message in place
+                // Update the streaming message in place — but strip control
+                // tags from the VISIBLE content so the user never sees raw
+                // [[GOTO:...]] / [[EVENTS:...]] / [[TOUR:...]] markup as it
+                // streams in. Post-processing still runs after the stream
+                // completes to actually act on those commands.
+                const visible = stripControlTags(content);
                 setMessages(prev => {
                   const updated = [...prev];
-                  updated[updated.length - 1] = { role: 'assistant', content };
+                  updated[updated.length - 1] = { role: 'assistant', content: visible };
                   return updated;
                 });
               }
@@ -155,11 +273,10 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
       });
 
       // Extract events to persist to timeline
-      const eventsMatch = content.match(/\[\[EVENTS:(\[[\s\S]*?\])\]\]/);
-      if (eventsMatch) {
-        content = content.replace(eventsMatch[0], '').trim();
+      const eventsPayload = extractTag(content, 'EVENTS');
+      if (eventsPayload) {
         try {
-          const rawEvents = JSON.parse(eventsMatch[1]);
+          const rawEvents = JSON.parse(eventsPayload);
           if (Array.isArray(rawEvents) && rawEvents.length > 0) {
             const newEvents: TimelineEvent[] = rawEvents
               .filter((e: any) => e.title && e.year != null)
@@ -188,27 +305,22 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
         }
       }
 
-      // Extract tour
-      const tourMatch = content.match(/\[\[TOUR:(\[[\s\S]*?\])\]\]/);
-      if (tourMatch) {
-        content = content.replace(tourMatch[0], '').trim();
+      // Extract tour. We use a nesting-aware scan (same approach as the
+      // visible strip) so the JSON array can contain anything without
+      // tripping up a naive regex.
+      const tourPayload = extractTag(content, 'TOUR');
+      if (tourPayload) {
         try {
-          const stops = JSON.parse(tourMatch[1]) as TourStop[];
+          const stops = JSON.parse(tourPayload) as TourStop[];
           if (Array.isArray(stops) && stops.length > 0) {
-            setMessages(prev => [...prev, {
-              role: 'assistant',
-              content: content || "Starting your tour! Sit back and enjoy.",
-            }]);
             setTimeout(() => onStartTour(stops), 1500);
-            setLoading(false);
-            return;
           }
         } catch (e) {
           console.error('Tour parse error:', e);
         }
       }
 
-      const cleanContent = content.trim();
+      const cleanContent = stripControlTags(content).trim();
       if (wasStreaming) {
         // Update the streaming message in place (no flicker)
         setMessages(prev => {
@@ -235,52 +347,22 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
     }
   }, [messages, buildContext, onNavigate, onStartTour, onAddEvents, voiceMode]);
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        style={{
-          position: 'absolute',
-          bottom: 20,
-          right: 20,
-          width: 52,
-          height: 52,
-          borderRadius: '50%',
-          background: 'rgba(13, 17, 23, 0.9)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          color: '#fff',
-          fontSize: 24,
-          cursor: 'pointer',
-          backdropFilter: 'blur(20px)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          zIndex: 30,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'transform 0.2s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-      >
-        💬
-      </button>
-    );
-  }
+  if (!open) return null;
 
   return (
     <div style={{
-      position: 'absolute',
-      bottom: 20,
-      right: 20,
-      width: 400,
-      maxWidth: 'calc(100vw - 40px)',
-      height: 520,
-      maxHeight: 'calc(100vh - 100px)',
-      background: 'rgba(13, 17, 23, 0.95)',
-      borderRadius: 16,
-      border: '1px solid rgba(255,255,255,0.08)',
+      // Persistent right drawer — full canvas height, anchored under
+      // the editorial header, always-on when activePanel === 'chat'.
+      position: 'fixed',
+      top: 56,
+      right: 0,
+      bottom: 0,
+      width: 'min(420px, 36vw)',
+      background: 'rgba(10,14,26,0.92)',
+      borderLeft: '1px solid var(--hairline, rgba(255,255,255,0.08))',
       backdropFilter: 'blur(20px)',
-      boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+      WebkitBackdropFilter: 'blur(20px)',
+      boxShadow: '-12px 0 40px rgba(0,0,0,0.35)',
       zIndex: 50,
       display: 'flex',
       flexDirection: 'column',
@@ -288,17 +370,34 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
     }}>
       {/* Header */}
       <div style={{
-        padding: '14px 18px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        padding: '18px 22px 14px',
+        borderBottom: '1px solid var(--hairline, rgba(255,255,255,0.06))',
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
       }}>
-        <span style={{ fontSize: 20 }}>🧭</span>
-        <div>
-          <div style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>CHRONOS Guide</div>
-          <div style={{ color: '#ffffff50', fontSize: 10, fontFamily: 'monospace' }}>
-            AI History Companion
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+          <div style={{
+            fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+            fontSize: 18,
+            fontWeight: 500,
+            color: 'var(--paper, #f5f1e8)',
+            letterSpacing: '0.01em',
+            lineHeight: 1.1,
+          }}>
+            The Guide
+          </div>
+          <div style={{
+            fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+            fontStyle: 'italic',
+            color: 'var(--paper-mute, #ffffff60)',
+            fontSize: 11,
+            letterSpacing: '0.02em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            ask anything about what you see
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -323,7 +422,7 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
             {voiceMode ? '🔊' : '🔇'}
           </button>
           <button
-            onClick={() => setOpen(false)}
+            onClick={() => { setOpen(false); onClose?.(); }}
             style={{
               background: 'none',
               border: 'none',
@@ -354,20 +453,87 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
               alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
             }}
           >
-            <div style={{
-              background: msg.role === 'user'
-                ? 'rgba(59, 130, 246, 0.2)'
-                : 'rgba(255,255,255,0.04)',
-              border: `1px solid ${msg.role === 'user' ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'}`,
-              borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-              padding: '10px 14px',
-              maxWidth: '85%',
-              color: '#ffffffdd',
-              fontSize: 13,
-              lineHeight: 1.55,
-              whiteSpace: 'pre-wrap',
-            }}>
-              {msg.content}
+            <div
+              className="chat-bubble"
+              style={{
+                background: msg.role === 'user'
+                  ? 'rgba(59, 130, 246, 0.2)'
+                  : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${msg.role === 'user' ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                padding: '10px 14px',
+                maxWidth: '85%',
+                color: '#ffffffdd',
+                fontSize: 13,
+                lineHeight: 1.55,
+              }}
+            >
+              {msg.role === 'user' ? (
+                <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+              ) : (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    a: ({ node, ...props }) => (
+                      <a
+                        {...props}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#60a5fa', textDecoration: 'underline' }}
+                      />
+                    ),
+                    p: ({ node, ...props }) => (
+                      <p {...props} style={{ margin: '0 0 8px' }} />
+                    ),
+                    ul: ({ node, ...props }) => (
+                      <ul {...props} style={{ margin: '4px 0 8px', paddingLeft: 18 }} />
+                    ),
+                    ol: ({ node, ...props }) => (
+                      <ol {...props} style={{ margin: '4px 0 8px', paddingLeft: 18 }} />
+                    ),
+                    li: ({ node, ...props }) => (
+                      <li {...props} style={{ margin: '2px 0' }} />
+                    ),
+                    h1: ({ node, ...props }) => (
+                      <h1 {...props} style={{ fontSize: 16, fontWeight: 700, margin: '8px 0 4px' }} />
+                    ),
+                    h2: ({ node, ...props }) => (
+                      <h2 {...props} style={{ fontSize: 15, fontWeight: 700, margin: '8px 0 4px' }} />
+                    ),
+                    h3: ({ node, ...props }) => (
+                      <h3 {...props} style={{ fontSize: 14, fontWeight: 700, margin: '6px 0 3px' }} />
+                    ),
+                    code: ({ node, ...props }) => (
+                      <code
+                        {...props}
+                        style={{
+                          background: 'rgba(255,255,255,0.08)',
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          fontSize: 12,
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                        }}
+                      />
+                    ),
+                    blockquote: ({ node, ...props }) => (
+                      <blockquote
+                        {...props}
+                        style={{
+                          margin: '6px 0',
+                          paddingLeft: 10,
+                          borderLeft: '2px solid rgba(255,255,255,0.2)',
+                          color: '#ffffffaa',
+                        }}
+                      />
+                    ),
+                    hr: () => (
+                      <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '8px 0' }} />
+                    ),
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              )}
             </div>
           </div>
         ))}

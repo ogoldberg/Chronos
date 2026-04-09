@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AIProvider, AIMessage, AIResponse, AIProviderConfig } from './types';
+import type { AIProvider, AIMessage, AIResponse, AIProviderConfig, AIChatOptions } from './types';
 
 export class AnthropicProvider implements AIProvider {
   readonly name = 'anthropic';
@@ -21,12 +21,12 @@ export class AnthropicProvider implements AIProvider {
   async chat(
     system: string,
     messages: AIMessage[],
-    options?: { maxTokens?: number; webSearch?: boolean },
+    options?: AIChatOptions,
   ): Promise<AIResponse> {
     const useWebSearch = options?.webSearch ?? this.webSearch;
 
     const msg = await this.client.messages.create({
-      model: this.model,
+      model: options?.model || this.model,
       max_tokens: options?.maxTokens || this.maxTokens,
       system,
       ...(useWebSearch
@@ -49,12 +49,12 @@ export class AnthropicProvider implements AIProvider {
     system: string,
     messages: AIMessage[],
     onToken: (token: string) => void,
-    options?: { maxTokens?: number; webSearch?: boolean },
+    options?: AIChatOptions,
   ): Promise<AIResponse> {
     const useWebSearch = options?.webSearch ?? this.webSearch;
 
     const stream = this.client.messages.stream({
-      model: this.model,
+      model: options?.model || this.model,
       max_tokens: options?.maxTokens || this.maxTokens,
       system,
       ...(useWebSearch

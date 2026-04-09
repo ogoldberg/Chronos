@@ -1,3 +1,73 @@
+/*
+  Chronos design tokens.
+  Editorial / chrono-archival language. See docs/redesign-2026.md for the
+  rationale and the full system. Everything app-wide should reach for these
+  variables instead of hardcoding colors / fonts / radii.
+*/
+:root {
+  /* ── Color ────────────────────────────────────────────────────────── */
+  /* Background ladder — deepest at the canvas, lighter at lifted panels */
+  --ink-900: #0a0e1a;          /* canvas / page background */
+  --ink-800: #0d1322;          /* panel background, one step up */
+  --ink-700: #131a2c;          /* hover / lifted panel */
+  --ink-600: #1a2238;          /* selected / pressed */
+
+  /* Foreground — warm cream, reads as paper not LED */
+  --paper:        #f4ecd8;
+  --paper-soft:   rgba(244, 236, 216, 0.78);
+  --paper-mute:   rgba(244, 236, 216, 0.55);
+  --paper-faint:  rgba(244, 236, 216, 0.32);
+  --paper-ghost:  rgba(244, 236, 216, 0.14);
+
+  /* Accent — amber / ember. Used sparingly: active states, key data, the
+     wordmark, the cursor on the timeline ruler. */
+  --ember:        #e8a94b;
+  --ember-soft:   rgba(232, 169, 75, 0.35);
+  --ember-faint:  rgba(232, 169, 75, 0.12);
+
+  /* Hairlines — almost-invisible borders that replace 1px-rounded-card chrome */
+  --hairline:        rgba(244, 236, 216, 0.10);
+  --hairline-strong: rgba(244, 236, 216, 0.18);
+
+  /* Atmosphere — supporting accents borrowed from the existing globe */
+  --sky-deep:  #1a2c45;
+  --sky-mid:   #2b75b2;
+
+  /* Era band tints — muted versions of the original era palette so they
+     read as background context, not as foreground UI. */
+  --era-cosmic:    #6a5b8e;
+  --era-life:      #3a7d75;
+  --era-mammal:    #8a6240;
+  --era-civ:       #a78440;
+  --era-classical: #984a3e;
+  --era-medieval:  #5a3e2a;
+  --era-modern:    #3f5a3a;
+  --era-now:       #356b8a;
+
+  /* ── Type ─────────────────────────────────────────────────────────── */
+  /* Display: high-contrast variable serif. Used for the wordmark, era
+     markers on the timeline ruler, and big year displays. */
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+
+  /* UI / body: humanist sans. Replaces the default system stack
+     everywhere except where mono or display is intentional. */
+  --font-ui: "Instrument Sans", "Söhne", -apple-system, BlinkMacSystemFont,
+             "Segoe UI", sans-serif;
+
+  /* Mono: data — years, coordinates, ruler ticks, keyboard hints. */
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  /* ── Radii ────────────────────────────────────────────────────────── */
+  /* Mostly squared. Pills are intentionally banished from the new design. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+
+  /* ── Motion ───────────────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.1, 1);
+  --ease-in-out: cubic-bezier(0.5, 0, 0.2, 1);
+}
+
 /* Reset */
 *, *::before, *::after {
   margin: 0;
@@ -9,11 +79,25 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0a0a1a;
-  color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--ink-900);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  font-feature-settings: "ss01", "ss02", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Native form elements pick up the cream/dark theme so the date picker
+   input doesn't suddenly look like a Windows 95 control. */
+input, textarea, button {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* Selection in cream + ember to reinforce the typographic palette. */
+::selection {
+  background: var(--ember-soft);
+  color: var(--paper);
 }
 
 #root {

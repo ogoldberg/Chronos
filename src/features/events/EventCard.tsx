@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { TimelineEvent, WikiData, Citation } from '../../types';
 import { formatYear } from '../../utils/format';
 import { fetchWikiSummary } from '../../services/wikipediaApi';
-import { searchWikisource, type SourceDocument } from '../../services/wikisourceApi';
+import { fetchPrimarySources } from '../../services/primarySources';
+import type { PrimarySource } from '../../types';
 import { factCheckEvent, type FactCheckResult } from '../../services/factCheck';
 import { verifyCitations } from '../../services/citationVerifier';
 import EventVoting from './EventVoting';
@@ -13,12 +14,33 @@ interface Props {
   onAskGuide: (question: string) => void;
 }
 
+/** Shared shape for the trio of action buttons at the bottom of the card. */
+const EVENT_ACTION_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: 0,
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--paper-mute, #ffffff90)',
+  textDecoration: 'none',
+  fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+  fontStyle: 'italic',
+  fontSize: 13,
+  letterSpacing: '0.01em',
+  cursor: 'pointer',
+};
+
 export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [wiki, setWiki] = useState<WikiData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sources, setSources] = useState<SourceDocument[]>([]);
+  const [sources, setSources] = useState<PrimarySource[]>([]);
   const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null);
   const [verifiedCitations, setVerifiedCitations] = useState<Citation[]>([]);
+  // Wikipedia section expanded state. When collapsed we clamp the extract
+  // at ~120px with a fade mask; when expanded the full article text flows
+  // inline and the card itself scrolls to accommodate it.
+  const [wikiExpanded, setWikiExpanded] = useState(false);
 
   useEffect(() => {
     if (event.wiki) {
@@ -35,12 +57,17 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         .then(setFactCheck)
         .catch(() => {});
     }
-    if (event.year > -3000) {
-      searchWikisource(event.title)
-        .then(setSources)
-        .catch(() => {});
-    }
-  }, [event.wiki, event.title, event.year, event.source, event.description, event.citations]);
+    // Primary-source discovery. `fetchPrimarySources` handles curated
+    // events, sentinel short-circuit, prehistoric short-circuit, and the
+    // AI-backed discovery path internally — we just fire and forget.
+    fetchPrimarySources(event)
+      .then(setSources)
+      .catch(() => setSources([]));
+    // Depend on event.id only. Including the whole `event` object (or
+    // nested fields) refires on every parent re-render that produces a
+    // new reference, spamming /api/sources/primary and the fact-check
+    // endpoint. Per-event identity is what we actually care about.
+  }, [event.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [imgLoaded, setImgLoaded] = useState(false);
 
@@ -50,19 +77,21 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
       top: '50%',
       left: '50%',
       transform: 'translate(-50%, -50%)',
-      background: 'rgba(10, 13, 20, 0.96)',
-      border: `1px solid ${event.color}30`,
-      borderRadius: 18,
+      background: 'rgba(10, 14, 26, 0.96)',
+      border: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+      borderRadius: 2,
       padding: 0,
-      maxWidth: 480,
+      maxWidth: 520,
       width: '90vw',
-      maxHeight: '80vh',
+      maxHeight: '82vh',
       overflow: 'hidden',
       overflowY: 'auto',
       zIndex: 100,
       backdropFilter: 'blur(24px)',
-      boxShadow: `0 0 60px ${event.color}15, 0 24px 80px rgba(0,0,0,0.6)`,
+      WebkitBackdropFilter: 'blur(24px)',
+      boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
       animation: 'modalSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+      fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
     }}>
       {/* Header image with shimmer loading state */}
       {(event.imageUrl || wiki?.thumb) && (
@@ -108,64 +137,75 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         {/* Close button */}
         <button
           onClick={onClose}
+          aria-label="Close"
           style={{
             position: 'absolute',
-            top: 12,
-            right: 12,
-            background: 'rgba(0,0,0,0.5)',
-            border: 'none',
-            color: '#fff',
-            fontSize: 18,
+            top: 14,
+            right: 14,
+            background: 'transparent',
+            border: '1px solid var(--hairline, rgba(255,255,255,0.12))',
+            color: 'var(--paper-mute, #ffffff80)',
+            fontSize: 14,
             cursor: 'pointer',
-            borderRadius: '50%',
-            width: 32,
-            height: 32,
+            borderRadius: 2,
+            width: 28,
+            height: 28,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backdropFilter: 'blur(10px)',
+            fontFamily: 'var(--font-display, Fraunces, serif)',
           }}
         >
-          ✕
+          &times;
         </button>
 
-        {/* Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <span style={{ fontSize: 28 }}>{event.emoji}</span>
-          <div>
-            <h2 style={{ margin: 0, color: '#fff', fontSize: 20 }}>{event.title}</h2>
-            <span style={{ color: event.color, fontSize: 13, fontFamily: 'monospace' }}>
-              {event.timestamp
-                ? new Date(event.timestamp).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: event.precision && ['month','week','day','hour','minute'].includes(event.precision) ? 'long' : undefined,
-                    day: event.precision && ['day','hour','minute'].includes(event.precision) ? 'numeric' : undefined,
-                  })
-                : formatYear(event.year)
-              }
-            </span>
-            {event.precision && event.precision !== 'year' && (
-              <span style={{ color: '#ffffff40', fontSize: 10, marginLeft: 6 }}>
-                ({event.precision} precision)
-              </span>
-            )}
-          </div>
+        {/* Source eyebrow */}
+        <div style={{
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '0.18em',
+          marginBottom: 10,
+          color: 'var(--paper-ghost, #ffffff45)',
+          textTransform: 'uppercase',
+          fontFamily: 'var(--font-display, Fraunces, serif)',
+        }}>
+          {event.source === 'anchor' ? 'Curated' : 'AI + Web Search'}
         </div>
 
-        {/* Source badge */}
-        <div style={{
-          display: 'inline-block',
-          padding: '2px 8px',
-          borderRadius: 10,
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: 0.5,
-          marginBottom: 12,
-          background: event.source === 'anchor' ? '#daa52030' : '#00bfff30',
-          color: event.source === 'anchor' ? '#daa520' : '#00bfff',
-          border: `1px solid ${event.source === 'anchor' ? '#daa52040' : '#00bfff40'}`,
+        {/* Title */}
+        <h2 style={{
+          margin: '0 0 4px',
+          color: 'var(--paper, #f5f1e8)',
+          fontSize: 30,
+          fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+          fontWeight: 500,
+          letterSpacing: '-0.005em',
+          lineHeight: 1.1,
         }}>
-          {event.source === 'anchor' ? 'CURATED' : 'AI + WEB SEARCH'}
+          {event.title}
+        </h2>
+
+        {/* Date subtitle */}
+        <div style={{
+          fontFamily: 'var(--font-display, Fraunces, Georgia, serif)',
+          fontStyle: 'italic',
+          color: 'var(--paper-mute, #ffffff70)',
+          fontSize: 14,
+          marginBottom: 16,
+        }}>
+          {event.timestamp
+            ? new Date(event.timestamp).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: event.precision && ['month','week','day','hour','minute'].includes(event.precision) ? 'long' : undefined,
+                day: event.precision && ['day','hour','minute'].includes(event.precision) ? 'numeric' : undefined,
+              })
+            : formatYear(event.year)
+          }
+          {event.precision && event.precision !== 'year' && (
+            <span style={{ color: 'var(--paper-ghost, #ffffff40)', fontSize: 11, marginLeft: 8, fontStyle: 'normal' }}>
+              ({event.precision} precision)
+            </span>
+          )}
         </div>
         {/* Fact-check badge for discovered events */}
         {factCheck && (
@@ -266,32 +306,81 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
         )}
         {wiki?.extract && (
           <div style={{
-            background: 'rgba(255,255,255,0.04)',
-            borderRadius: 10,
-            padding: 14,
+            background: 'transparent',
+            borderTop: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+            borderBottom: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+            padding: '14px 0',
             marginBottom: 16,
           }}>
             <div style={{
-              fontSize: 10,
-              color: '#ffffff50',
-              fontWeight: 600,
-              letterSpacing: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               marginBottom: 8,
             }}>
-              WIKIPEDIA
+              <div style={{
+                fontSize: 10,
+                color: 'var(--paper-ghost, #ffffff45)',
+                fontWeight: 500,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-display, Fraunces, serif)',
+              }}>
+                Wikipedia
+              </div>
+              <button
+                onClick={() => setWikiExpanded(v => !v)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--paper-mute, #ffffff80)',
+                  fontSize: 11,
+                  fontStyle: 'italic',
+                  padding: '2px 0',
+                  cursor: 'pointer',
+                  letterSpacing: '0.04em',
+                  fontFamily: 'var(--font-display, Fraunces, serif)',
+                }}
+              >
+                {wikiExpanded ? 'collapse \u2191' : 'read more \u2193'}
+              </button>
             </div>
-            <p style={{
-              color: '#ffffffaa',
-              fontSize: 13,
-              lineHeight: 1.5,
-              margin: 0,
-              maxHeight: 120,
-              overflow: 'hidden',
-              maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
-            }}>
-              {wiki.extract}
-            </p>
+            {/*
+              Collapsed: clamped height with a gradient fade so users can
+              tell there's more. Clicking the collapsed text also expands it
+              (not just the explicit button), making it feel like a single
+              accordion target.
+
+              Expanded: full article text flows inline. We cap at 60vh and
+              scroll internally so very long extracts don't push the rest of
+              the event card off-screen.
+            */}
+            <div
+              onClick={() => { if (!wikiExpanded) setWikiExpanded(true); }}
+              style={{
+                cursor: wikiExpanded ? 'default' : 'pointer',
+              }}
+            >
+              <p style={{
+                color: '#ffffffcc',
+                fontSize: 13,
+                lineHeight: 1.55,
+                margin: 0,
+                maxHeight: wikiExpanded ? '60vh' : 120,
+                overflowY: wikiExpanded ? 'auto' : 'hidden',
+                overflowX: 'hidden',
+                whiteSpace: 'pre-wrap',
+                maskImage: wikiExpanded
+                  ? 'none'
+                  : 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                WebkitMaskImage: wikiExpanded
+                  ? 'none'
+                  : 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                transition: 'max-height 0.25s ease',
+              }}>
+                {wiki.extract}
+              </p>
+            </div>
           </div>
         )}
 
@@ -420,7 +509,11 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
-        {/* Primary Sources */}
+        {/* Primary Sources — hidden entirely when the discovery pipeline
+            returns [], which is the right answer for sentinel events,
+            prehistoric events, and anything the AI couldn't verify. No
+            empty header, no "no sources found" message — absence is
+            honest. */}
         {sources.length > 0 && (
           <div style={{
             background: 'rgba(255,255,255,0.04)',
@@ -446,12 +539,41 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
                   fontSize: 12,
                 }}
               >
-                <div style={{ fontWeight: 500 }}>📜 {src.title}</div>
-                {src.extract && (
-                  <div style={{ color: '#ffffff60', fontSize: 11, marginTop: 2, lineHeight: 1.4 }}>
-                    {src.extract.slice(0, 100)}...
+                <div style={{ fontWeight: 500 }}>
+                  📜 {src.title}
+                  {src.year !== undefined && (
+                    <span style={{ color: '#ffffff45', fontWeight: 400, marginLeft: 6 }}>
+                      ({src.year < 0 ? `${Math.abs(src.year)} BCE` : src.year})
+                    </span>
+                  )}
+                </div>
+                {(src.author || src.type) && (
+                  <div style={{ color: '#ffffff50', fontSize: 10, marginTop: 2 }}>
+                    {[src.author, src.type].filter(Boolean).join(' · ')}
                   </div>
                 )}
+                {src.relevance && (
+                  <div style={{ color: '#ffffff60', fontSize: 11, marginTop: 2, lineHeight: 1.4, fontStyle: 'italic' }}>
+                    {src.relevance}
+                  </div>
+                )}
+                {/* Verification provenance: shown only when the
+                    extracted page title differs from the AI-claimed
+                    title in a way worth surfacing. If the strings
+                    match (or one is a prefix of the other), we skip
+                    it — redundant noise. When they differ, the
+                    extracted title tells the user what Unbrowser
+                    actually saw on the page, which is useful for
+                    citation verification. */}
+                {src.extractedTitle
+                  && src.extractedTitle.toLowerCase() !== src.title.toLowerCase()
+                  && !src.extractedTitle.toLowerCase().startsWith(src.title.toLowerCase())
+                  && (
+                    <div style={{ color: '#ffffff40', fontSize: 10, marginTop: 2, fontFamily: 'monospace' }}>
+                      ✓ verified as: {src.extractedTitle.slice(0, 80)}
+                      {src.extractedTitle.length > 80 ? '…' : ''}
+                    </div>
+                  )}
               </a>
             ))}
           </div>
@@ -464,69 +586,48 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {/* Actions — flat editorial buttons, hairline borders, serif text */}
+        <div style={{
+          display: 'flex',
+          gap: 0,
+          marginTop: 8,
+          borderTop: '1px solid var(--hairline, rgba(255,255,255,0.08))',
+          paddingTop: 14,
+        }}>
           {wiki?.url && (
             <a
               href={wiki.url}
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '8px 14px',
-                background: 'rgba(255,255,255,0.08)',
-                borderRadius: 8,
-                color: '#ffffffcc',
-                textDecoration: 'none',
-                fontSize: 12,
-                border: '1px solid rgba(255,255,255,0.1)',
-                cursor: 'pointer',
+                ...EVENT_ACTION_STYLE,
+                marginRight: 14,
               }}
             >
-              📖 Read Full Article ↗
+              Read full article &rarr;
             </a>
           )}
           <button
             onClick={() => onAskGuide(`Tell me more about ${event.title} (${formatYear(event.year)}). What made this significant and how does it connect to other events?`)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '8px 14px',
-              background: `${event.color}20`,
-              borderRadius: 8,
-              color: event.color,
-              fontSize: 12,
-              border: `1px solid ${event.color}40`,
-              cursor: 'pointer',
-            }}
+            style={{ ...EVENT_ACTION_STYLE, marginRight: 14, background: 'transparent' }}
           >
-            💬 Ask Guide
+            Ask the guide
           </button>
           <button
             onClick={() => {
               const url = window.location.href;
               navigator.clipboard.writeText(url).then(() => {
                 const btn = document.activeElement as HTMLButtonElement;
-                if (btn) { btn.textContent = '✓ Copied!'; setTimeout(() => { btn.textContent = '🔗 Share'; }, 1500); }
+                if (btn) {
+                  const orig = btn.textContent;
+                  btn.textContent = 'Copied';
+                  setTimeout(() => { btn.textContent = orig; }, 1500);
+                }
               });
             }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '8px 14px',
-              background: 'rgba(255,255,255,0.08)',
-              borderRadius: 8,
-              color: '#ffffffaa',
-              fontSize: 12,
-              border: '1px solid rgba(255,255,255,0.1)',
-              cursor: 'pointer',
-            }}
+            style={{ ...EVENT_ACTION_STYLE, background: 'transparent', marginLeft: 'auto' }}
           >
-            🔗 Share
+            Share
           </button>
         </div>
       </div>

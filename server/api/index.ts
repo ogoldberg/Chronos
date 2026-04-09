@@ -28,10 +28,12 @@ import { registerComparisonRoutes } from './routes/comparison';
 import { registerModerationRoutes } from './routes/moderation';
 import { registerTodayRoutes } from './routes/today';
 import { registerNearbyRoutes } from './routes/nearby';
+import { registerRegionRoutes } from './routes/region';
 import { registerPublicApiRoutes } from './routes/publicApi';
 import { registerFiguresRoutes } from './routes/figures';
 import { registerReadingRoutes } from './routes/reading';
 import { registerSourcesRoutes } from './routes/sources';
+import { registerThreadsRoutes } from './routes/threads';
 
 export { handleStreamRequest };
 
@@ -94,10 +96,12 @@ registerComparisonRoutes(handleRoute);
 registerModerationRoutes(handleRoute, isDbReady);
 registerTodayRoutes(handleRoute);
 registerNearbyRoutes(handleRoute);
+registerRegionRoutes(handleRoute);
 registerPublicApiRoutes(handleRoute, isDbReady);
 registerFiguresRoutes(handleRoute);
 registerReadingRoutes(handleRoute);
 registerSourcesRoutes(handleRoute);
+registerThreadsRoutes(handleRoute);
 
 // ── Request dispatcher ───────────────────────────────────────────────
 

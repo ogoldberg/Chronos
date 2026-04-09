@@ -6,8 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>CHRONOS — Timeline of Existence</title>
     <meta name="description" content="An infinite zoomable timeline from the Big Bang to the present day, powered by AI" />
-    <meta name="theme-color" content="#0a0a1a" />
+    <meta name="theme-color" content="#0a0e1a" />
     <link rel="manifest" href="/manifest.json" />
+    <!--
+      Editorial typography stack:
+      - Fraunces: high-contrast variable serif used for display type,
+        timeline era markers, and the Chronos wordmark
+      - Instrument Sans: humanist sans for UI/body text
+      - JetBrains Mono: mono for years, coordinates, ruler ticks, cmdk shortcut hints
+      We preconnect to both Google Fonts origins and preload only the critical
+      weights so the first paint doesn't flash in the default system font.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>

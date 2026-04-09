@@ -17,7 +17,7 @@ export default function InsightsPanel({ viewport, visibleEvents }: Props) {
   useEffect(() => {
     // Only fetch when zoomed past cosmic scale
     if (viewport.span > 1e9) {
-      setInsights([]);
+      setInsights(prev => (prev.length === 0 ? prev : []));
       return;
     }
 
@@ -48,7 +48,10 @@ export default function InsightsPanel({ viewport, visibleEvents }: Props) {
     }, 2500);
 
     return () => clearTimeout(timerRef.current);
-  }, [viewport.centerYear, viewport.span, visibleEvents]);
+    // visibleEvents intentionally omitted: its identity changes every render and
+    // the request key already encodes when a refetch is meaningful.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewport.centerYear, viewport.span]);
 
   if (viewport.span > 1e9 && insights.length === 0) return null;
 

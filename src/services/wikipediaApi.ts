@@ -28,15 +28,3 @@ export async function fetchWikiSummary(title: string): Promise<WikiData | null> 
   }
 }
 
-export async function searchWiki(query: string): Promise<string[]> {
-  try {
-    const resp = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=3&format=json&origin=*`
-    );
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return data.query?.search?.map((x: { title: string }) => x.title) ?? [];
-  } catch {
-    return [];
-  }
-}

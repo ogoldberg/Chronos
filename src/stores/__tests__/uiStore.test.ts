@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useUIStore } from '../uiStore';
+import { makeCustomTheme } from '../../data/themes';
 
 describe('uiStore', () => {
   beforeEach(() => {
@@ -90,6 +91,94 @@ describe('uiStore', () => {
       expect(useUIStore.getState().activeLens?.name).toBe('Science');
       useUIStore.getState().setActiveLens(null);
       expect(useUIStore.getState().activeLens).toBeNull();
+    });
+  });
+
+  describe('themed timelines', () => {
+    it('themed timelines disabled by default', () => {
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(false);
+    });
+
+    it('starts with every theme active', () => {
+      const themes = useUIStore.getState().activeThemes;
+      expect(themes.size).toBeGreaterThanOrEqual(6);
+      expect(themes.has('science')).toBe(true);
+      expect(themes.has('art')).toBe(true);
+    });
+
+    it('toggleThemedTimelines flips the flag', () => {
+      useUIStore.getState().toggleThemedTimelines();
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(true);
+      useUIStore.getState().toggleThemedTimelines();
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(false);
+    });
+
+    it('toggleActiveTheme adds and removes individual themes', () => {
+      useUIStore.getState().toggleActiveTheme('war');
+      expect(useUIStore.getState().activeThemes.has('war')).toBe(false);
+      useUIStore.getState().toggleActiveTheme('war');
+      expect(useUIStore.getState().activeThemes.has('war')).toBe(true);
+    });
+
+    it('enabling themed timelines turns off region lanes', () => {
+      useUIStore.setState({ lanesEnabled: true, themedTimelinesEnabled: false });
+      useUIStore.getState().toggleThemedTimelines();
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(true);
+      expect(useUIStore.getState().lanesEnabled).toBe(false);
+    });
+
+    it('enabling region lanes turns off themed timelines', () => {
+      useUIStore.setState({ lanesEnabled: false, themedTimelinesEnabled: true });
+      useUIStore.getState().toggleLanes();
+      expect(useUIStore.getState().lanesEnabled).toBe(true);
+      expect(useUIStore.getState().themedTimelinesEnabled).toBe(false);
+    });
+  });
+
+  describe('custom themes', () => {
+    beforeEach(() => {
+      // Clear any persisted state between tests so localStorage doesn't
+      // leak custom themes across cases.
+      if (typeof localStorage !== 'undefined') localStorage.clear();
+      useUIStore.setState({ customThemes: [] });
+    });
+
+    it('addCustomTheme appends to the list and auto-enables the theme', () => {
+      const theme = makeCustomTheme({ label: 'Color blue', tags: ['blue'] });
+      useUIStore.getState().addCustomTheme(theme);
+      const state = useUIStore.getState();
+      expect(state.customThemes.some(t => t.id === theme.id)).toBe(true);
+      expect(state.activeThemes.has(theme.id)).toBe(true);
+    });
+
+    it('addCustomTheme replaces existing theme with same id (edit flow)', () => {
+      const a = makeCustomTheme({ label: 'Color blue', tags: ['blue'] });
+      useUIStore.getState().addCustomTheme(a);
+      const b = { ...a, label: 'The color blue' };
+      useUIStore.getState().addCustomTheme(b);
+      const state = useUIStore.getState();
+      expect(state.customThemes.filter(t => t.id === a.id)).toHaveLength(1);
+      expect(state.customThemes[0].label).toBe('The color blue');
+    });
+
+    it('removeCustomTheme drops it and disables the theme', () => {
+      const theme = makeCustomTheme({ label: 'Gone soon' });
+      useUIStore.getState().addCustomTheme(theme);
+      useUIStore.getState().removeCustomTheme(theme.id);
+      const state = useUIStore.getState();
+      expect(state.customThemes.some(t => t.id === theme.id)).toBe(false);
+      expect(state.activeThemes.has(theme.id)).toBe(false);
+    });
+
+    it('persists custom themes to localStorage', () => {
+      if (typeof localStorage === 'undefined') return;
+      const theme = makeCustomTheme({ label: 'Persist me', tags: ['foo'] });
+      useUIStore.getState().addCustomTheme(theme);
+      const raw = localStorage.getItem('chronos_custom_themes_v1');
+      expect(raw).toBeTruthy();
+      const parsed = JSON.parse(raw!);
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed.some((t: { id: string }) => t.id === theme.id)).toBe(true);
     });
   });
 
