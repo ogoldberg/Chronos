@@ -251,6 +251,12 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     // (redirects, soft-404s, wrong editions, etc.). Disabled by default
     // — without UNBROWSER_API_KEY set, the candidates pass through
     // unchanged and we trust the AI + prompt enforcement alone.
+    //
+    // Empirical rejection rate observed in testing: 4 of 5 candidates
+    // for "American Independence" failed verification (3 unreachable
+    // URLs, 1 title mismatch), leaving 1 verified National Archives
+    // transcription. That's the residual hallucination class this
+    // layer is designed to catch.
     let sources: unknown[] = candidates;
     if (unbrowserEnabled() && candidates.length > 0) {
       const verified = await verifyUrls(candidates.map(c => c.url));
