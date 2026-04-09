@@ -24,6 +24,22 @@ import type { TimelineEvent } from './types';
 import './App.css';
 
 const GlobePanel = lazy(() => import('./features/globe/GlobePanel'));
+const SourcesMetricsDashboard = lazy(() => import('./features/admin/SourcesMetricsDashboard'));
+
+/**
+ * Watch the URL hash so admin surfaces can activate via e.g.
+ * `#sources-metrics` without needing a full router. Returns the
+ * current hash without the leading '#'.
+ */
+function useHash(): string {
+  const [hash, setHash] = useState(() => (typeof window !== 'undefined' ? window.location.hash.slice(1) : ''));
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash.slice(1));
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  return hash;
+}
 
 export default function App() {
   // Store subscriptions
@@ -167,6 +183,15 @@ export default function App() {
     setSelectedEvent(ev);
     if (ev) recordEventView();
   }, [setSelectedEvent]);
+
+  const hash = useHash();
+  if (hash === 'sources-metrics') {
+    return (
+      <Suspense fallback={null}>
+        <SourcesMetricsDashboard />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="chronos-root">
