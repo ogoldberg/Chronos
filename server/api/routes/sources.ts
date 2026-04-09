@@ -10,6 +10,7 @@ import { getProvider } from '../../providers/index';
 import { SOURCE_COMPARISON_SYSTEM, PRIMARY_SOURCES_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
+import { unbrowserEnabled, verifyUrls, titleMatches } from '../../services/unbrowser';
 import type { RouteHandler } from '../index';
 
 const SourcesRequestSchema = z.object({
@@ -222,9 +223,9 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     //    a primary source for something that hadn't happened yet)
     //  - dedupe by URL
     const seen = new Set<string>();
-    const sources: unknown[] = [];
-    for (const candidate of arr) {
-      const result = AISourceSchema.safeParse(candidate);
+    const candidates: Array<z.infer<typeof AISourceSchema>> = [];
+    for (const c of arr) {
+      const result = AISourceSchema.safeParse(c);
       if (!result.success) continue;
       const s = result.data;
       if (seen.has(s.url)) continue;
@@ -238,8 +239,32 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
       // per-type upper bound is handled by the AI via the prompt. 1-year
       // tolerance handles year-boundary and BCE/CE fencepost ambiguity.
       if (typeof s.year === 'number' && s.year < year - 1) continue;
-      sources.push(s);
-      if (sources.length >= 5) break;
+      candidates.push(s);
+      if (candidates.length >= 5) break;
+    }
+
+    // Optional second-pass validation via Unbrowser. When configured, we
+    // submit every candidate URL through a real browser render and
+    // compare the extracted page title against the AI's claim. This
+    // catches the residual class of hallucinations where the AI cites
+    // a page that exists but doesn't actually contain the claimed work
+    // (redirects, soft-404s, wrong editions, etc.). Disabled by default
+    // — without UNBROWSER_API_KEY set, the candidates pass through
+    // unchanged and we trust the AI + prompt enforcement alone.
+    let sources: unknown[] = candidates;
+    if (unbrowserEnabled() && candidates.length > 0) {
+      const verified = await verifyUrls(candidates.map(c => c.url));
+      if (verified.length === candidates.length) {
+        sources = candidates.filter((c, i) => {
+          const v = verified[i];
+          if (!v.reachable) return false;
+          return titleMatches(c.title, v.extractedTitle);
+        });
+      }
+      // If verified.length !== candidates.length, Unbrowser returned
+      // nothing useful — fall back to the unverified candidates rather
+      // than dropping everything. Transient Unbrowser issues shouldn't
+      // empty the response.
     }
 
     cacheSet(key, sources);
