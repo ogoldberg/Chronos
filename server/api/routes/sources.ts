@@ -331,6 +331,11 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
           year: typeof c.year === 'number' ? c.year : undefined,
         })),
       );
+      // verifyClaims returns exactly `candidates.length` results on
+      // success or `[]` on transport failure / length mismatch. The
+      // empty case falls through and leaves `sources = candidates`
+      // unverified, preserving the "transient Unbrowser issue shouldn't
+      // drop everything" contract.
       if (verified.length === candidates.length) {
         // Enrich each surviving candidate with the extractedTitle
         // from verifyClaims so the UI can display what Unbrowser
@@ -353,10 +358,6 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
           })
           .filter((s): s is NonNullable<typeof s> => s !== null);
       }
-      // If verified.length !== candidates.length, Unbrowser returned
-      // nothing useful — fall back to the unverified candidates rather
-      // than dropping everything. Transient Unbrowser issues shouldn't
-      // empty the response.
     }
 
     metrics.finalSources += (sources as unknown[]).length;

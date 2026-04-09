@@ -63,7 +63,11 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
     fetchPrimarySources(event)
       .then(setSources)
       .catch(() => setSources([]));
-  }, [event, event.wiki, event.title, event.year, event.source, event.description, event.citations]);
+    // Depend on event.id only. Including the whole `event` object (or
+    // nested fields) refires on every parent re-render that produces a
+    // new reference, spamming /api/sources/primary and the fact-check
+    // endpoint. Per-event identity is what we actually care about.
+  }, [event.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [imgLoaded, setImgLoaded] = useState(false);
 
