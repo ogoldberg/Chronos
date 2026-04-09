@@ -7,16 +7,19 @@ import { nowYear, clampViewport } from '../canvas/viewport';
 
 const urlState = readURLState();
 
-// Default "zoom all the way out" viewport: from the Big Bang (13.8 Ga)
-// to the present, centered so both ends are comfortably visible. Span is
-// slightly larger than 13.8 Ga to give a bit of padding on each side.
-// Computed as a function of the current clock so a very long-lived build
-// that persists past year boundaries still centers on the right place.
+// Default "all of history" viewport: Big Bang (13.8 Ga) exactly on the
+// left edge, present day exactly on the right edge. Computed directly
+// rather than via clampViewport so the intent is obvious and the result
+// is stable (the previous implementation leaned on the clamp's right-
+// edge cap to pull an over-centered viewport back into range, which
+// left behind an asymmetric padding that wasn't obvious from reading
+// the code).
+const BIG_BANG = -13.8e9;
 function defaultViewport(): Viewport {
-  return clampViewport({
-    centerYear: (nowYear() + -13.8e9) / 2,
-    span: 14e9,
-  });
+  const now = nowYear();
+  const span = now - BIG_BANG; // ≈ 13.8e9 + a fractional year
+  const centerYear = (BIG_BANG + now) / 2;
+  return { centerYear, span };
 }
 
 /**
