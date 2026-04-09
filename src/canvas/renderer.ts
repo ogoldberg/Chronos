@@ -1,7 +1,7 @@
 import type { TimelineEvent, Viewport } from '../types';
 import { getEra, ERAS } from '../data/eras';
 import { formatYear, formatYearShort } from '../utils/format';
-import { yearToPixel, isEventVisible } from './viewport';
+import { yearToPixel, isEventVisible, nowYear } from './viewport';
 import { REGION_LANES, matchEventToRegion } from '../data/regions';
 import {
   type TimelineTheme,
@@ -189,6 +189,36 @@ export function renderTimeline(
     ctx.stroke();
     ctx.fillStyle = '#ffffff55';
     ctx.fillText(formatYearShort(y), x, timelineY + 24);
+  }
+
+  // Present day marker — a distinct vertical rule + "TODAY" label that
+  // anchors the right end of the timeline. Without this, at cosmic zoom
+  // levels the entire 2026 years of recorded history are sub-pixel wide
+  // and the user has no visual cue that present day is even on the
+  // canvas. Only drawn when nowYear falls within the visible range.
+  {
+    const now = nowYear();
+    if (now >= left && now <= right) {
+      const nowX = yearToPixel(now, vp, W);
+      ctx.strokeStyle = '#f6b73caa';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(nowX, timelineY - 22);
+      ctx.lineTo(nowX, timelineY + 22);
+      ctx.stroke();
+      ctx.fillStyle = '#f6b73caa';
+      ctx.beginPath();
+      ctx.arc(nowX, timelineY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      // The TODAY label is right-aligned so it hugs the right edge of the
+      // canvas instead of spilling off-screen when present day is the
+      // right-most visible moment.
+      ctx.font = `600 10px "General Sans", -apple-system, sans-serif`;
+      ctx.fillStyle = '#f6b73ccc';
+      const nearRightEdge = nowX > W - 50;
+      ctx.textAlign = nearRightEdge ? 'right' : 'center';
+      ctx.fillText('TODAY', nearRightEdge ? nowX - 4 : nowX, timelineY - 28);
+    }
   }
 
   // Filter visible events
