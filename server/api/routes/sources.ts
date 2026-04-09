@@ -10,7 +10,7 @@ import { getProvider } from '../../providers/index';
 import { SOURCE_COMPARISON_SYSTEM, PRIMARY_SOURCES_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
-import { unbrowserEnabled, verifyUrls, titleMatches } from '../../services/unbrowser';
+import { unbrowserEnabled, verifyClaims } from '../../services/unbrowser';
 import type { RouteHandler } from '../index';
 
 const SourcesRequestSchema = z.object({
@@ -292,33 +292,45 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     metrics.aiCandidates += candidates.length;
     if (candidates.length === 0) metrics.aiEmpty++;
 
-    // Optional second-pass validation via Unbrowser. When configured, we
-    // submit every candidate URL through a real browser render and
-    // compare the extracted page title against the AI's claim. This
-    // catches the residual class of hallucinations where the AI cites
-    // a page that exists but doesn't actually contain the claimed work
-    // (redirects, soft-404s, wrong editions, etc.). Disabled by default
-    // — without UNBROWSER_API_KEY set, the candidates pass through
-    // unchanged and we trust the AI + prompt enforcement alone.
+    // Optional second-pass validation via Unbrowser's /v1/verify
+    // endpoint. When configured, we send every candidate {url, title,
+    // year} to Unbrowser, which runs a real browser render, projects
+    // structured data from the rendered HTML, and applies
+    // chronology-aware title/year/author matching plus soft-404
+    // detection. Pages where the verification fails are dropped.
     //
-    // Empirical rejection rate observed in testing: 4 of 5 candidates
-    // for "American Independence" failed verification (3 unreachable
+    // Disabled by default — without UNBROWSER_API_KEY set, the
+    // candidates pass through unchanged and we trust the AI + prompt
+    // enforcement alone.
+    //
+    // Empirical rejection rate observed in earlier testing against
+    // the /v1/batch + client-side matching: 4 of 5 candidates for
+    // "American Independence" failed verification (3 unreachable
     // URLs, 1 title mismatch), leaving 1 verified National Archives
-    // transcription. That's the residual hallucination class this
-    // layer is designed to catch.
+    // transcription. The /v1/verify endpoint applies the same
+    // matching (token-overlap with threshold 0.5) server-side now,
+    // plus Unicode-aware tokenization and acronym preservation that
+    // the old client-side path didn't have.
     let sources: unknown[] = candidates;
     if (unbrowserEnabled() && candidates.length > 0) {
       metrics.verifierRuns++;
-      const verified = await verifyUrls(candidates.map(c => c.url));
+      const verified = await verifyClaims(
+        candidates.map(c => ({
+          url: c.url,
+          title: c.title,
+          year: typeof c.year === 'number' ? c.year : undefined,
+          author: c.author ?? undefined,
+        })),
+      );
       if (verified.length === candidates.length) {
-        sources = candidates.filter((c, i) => {
+        sources = candidates.filter((_, i) => {
           const v = verified[i];
           if (!v.reachable) {
             metrics.verifierDropped++;
             metrics.verifierUnreachable++;
             return false;
           }
-          if (!titleMatches(c.title, v.extractedTitle)) {
+          if (!v.verified) {
             metrics.verifierDropped++;
             return false;
           }
