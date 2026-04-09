@@ -79,6 +79,41 @@ function cacheSet(key: string, sources: unknown[]): void {
   primaryCache.set(key, { sources, at: Date.now() });
 }
 
+/**
+ * Running metrics for /api/sources/primary. Exposed via GET
+ * /api/sources/primary/metrics so operators can watch the AI → verified
+ * rejection rate over time without adding full observability
+ * infrastructure. All counters are process-lifetime — they reset on
+ * server restart, which is fine for a "what's my signal looking like
+ * right now" diagnostic but NOT a substitute for real metrics. If this
+ * becomes load-bearing we'd graduate it to prom-client or OpenTelemetry.
+ *
+ * - requests: total calls to the endpoint (including cache hits)
+ * - cacheHits: served entirely from the 24h LRU cache, no AI call
+ * - aiCalls: an AI request was actually dispatched (≠ cacheHits)
+ * - aiCandidates: total candidates AI returned across all aiCalls
+ * - aiEmpty: AI returned zero candidates (shouldn't happen often)
+ * - verifierRuns: unbrowser verification was invoked
+ * - verifierDropped: candidates that failed title/reachability check
+ * - verifierUnreachable: subset of verifierDropped where URL didn't load
+ * - finalSources: total sources returned to clients across all aiCalls
+ * - sentinelsBlocked: requests zod-rejected at the boundary (should be
+ *   zero in normal operation; non-zero means a client bypassed the
+ *   client-side classifier short-circuit)
+ */
+const metrics = {
+  requests: 0,
+  cacheHits: 0,
+  aiCalls: 0,
+  aiCandidates: 0,
+  aiEmpty: 0,
+  verifierRuns: 0,
+  verifierDropped: 0,
+  verifierUnreachable: 0,
+  finalSources: 0,
+  sentinelsBlocked: 0,
+};
+
 export function registerSourcesRoutes(handleRoute: RouteHandler) {
   handleRoute('POST', '/api/sources/compare', null, async (body, _url, reqHeaders) => {
     if (!checkRateLimit('sources', getClientIP(reqHeaders || {}))) {
@@ -136,12 +171,20 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
   });
 
   handleRoute('POST', '/api/sources/primary', null, async (body, _url, reqHeaders) => {
+    metrics.requests++;
     if (!checkRateLimit('sources-primary', getClientIP(reqHeaders || {}))) {
       return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
     }
 
     const validation = validate(PrimarySourcesRequestSchema, body);
     if (!validation.success) {
+      // Clients that bypass the client-side classifier (or send raw
+      // sourceClass values) land here. Sentinel/prehistoric rejection
+      // is the common case worth tracking separately so we can spot
+      // misbehaving integrations.
+      if (/sourceClass/i.test(validation.error || '')) {
+        metrics.sentinelsBlocked++;
+      }
       return { status: 400, data: { error: validation.error } };
     }
 
@@ -150,7 +193,11 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     // Cache lookup before doing any expensive AI work.
     const key = cacheKey(title, year, sourceClass);
     const cached = cacheGet(key);
-    if (cached) return { status: 200, data: { sources: cached, cached: true } };
+    if (cached) {
+      metrics.cacheHits++;
+      return { status: 200, data: { sources: cached, cached: true } };
+    }
+    metrics.aiCalls++;
 
     const ai = getProvider();
     const system = PRIMARY_SOURCES_SYSTEM(title, year, description, sourceClass);
@@ -242,6 +289,8 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
       candidates.push(s);
       if (candidates.length >= 5) break;
     }
+    metrics.aiCandidates += candidates.length;
+    if (candidates.length === 0) metrics.aiEmpty++;
 
     // Optional second-pass validation via Unbrowser. When configured, we
     // submit every candidate URL through a real browser render and
@@ -259,12 +308,21 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     // layer is designed to catch.
     let sources: unknown[] = candidates;
     if (unbrowserEnabled() && candidates.length > 0) {
+      metrics.verifierRuns++;
       const verified = await verifyUrls(candidates.map(c => c.url));
       if (verified.length === candidates.length) {
         sources = candidates.filter((c, i) => {
           const v = verified[i];
-          if (!v.reachable) return false;
-          return titleMatches(c.title, v.extractedTitle);
+          if (!v.reachable) {
+            metrics.verifierDropped++;
+            metrics.verifierUnreachable++;
+            return false;
+          }
+          if (!titleMatches(c.title, v.extractedTitle)) {
+            metrics.verifierDropped++;
+            return false;
+          }
+          return true;
         });
       }
       // If verified.length !== candidates.length, Unbrowser returned
@@ -273,7 +331,49 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
       // empty the response.
     }
 
+    metrics.finalSources += (sources as unknown[]).length;
     cacheSet(key, sources);
     return { status: 200, data: { sources } };
+  });
+
+  /**
+   * Lightweight diagnostic endpoint — returns running metrics for
+   * /api/sources/primary. Intentionally unauthenticated because the
+   * numbers are all counts (no PII, no content). If this is ever
+   * exposed publicly in a way where counts themselves are sensitive,
+   * gate it on ADMIN_KEY. For now it's the cheapest way to get an
+   * "is verification doing anything?" signal without wiring up real
+   * observability.
+   *
+   * Example query: curl http://localhost:5173/api/sources/primary/metrics
+   */
+  handleRoute('GET', '/api/sources/primary/metrics', null, async () => {
+    const aiCalls = metrics.aiCalls;
+    const verificationRate =
+      metrics.aiCandidates > 0
+        ? 1 - metrics.verifierDropped / metrics.aiCandidates
+        : null;
+    const cacheHitRate =
+      metrics.requests > 0 ? metrics.cacheHits / metrics.requests : null;
+    const avgCandidatesPerCall = aiCalls > 0 ? metrics.aiCandidates / aiCalls : null;
+    const avgFinalPerCall = aiCalls > 0 ? metrics.finalSources / aiCalls : null;
+    return {
+      status: 200,
+      data: {
+        ...metrics,
+        derived: {
+          // Fraction of AI-returned candidates that survived verification.
+          // Null until at least one candidate has been seen. Lower numbers
+          // mean the AI is producing more hallucinations / broken URLs and
+          // Unbrowser is catching them.
+          verificationSurvivalRate: verificationRate,
+          // Fraction of requests served from the 24h LRU cache without
+          // an AI call. Higher is better (cheaper) once the cache warms.
+          cacheHitRate,
+          avgCandidatesPerAiCall: avgCandidatesPerCall,
+          avgFinalSourcesPerAiCall: avgFinalPerCall,
+        },
+      },
+    };
   });
 }
