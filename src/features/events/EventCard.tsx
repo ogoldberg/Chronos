@@ -553,6 +553,23 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
                     {src.relevance}
                   </div>
                 )}
+                {/* Verification provenance: shown only when the
+                    extracted page title differs from the AI-claimed
+                    title in a way worth surfacing. If the strings
+                    match (or one is a prefix of the other), we skip
+                    it — redundant noise. When they differ, the
+                    extracted title tells the user what Unbrowser
+                    actually saw on the page, which is useful for
+                    citation verification. */}
+                {src.extractedTitle
+                  && src.extractedTitle.toLowerCase() !== src.title.toLowerCase()
+                  && !src.extractedTitle.toLowerCase().startsWith(src.title.toLowerCase())
+                  && (
+                    <div style={{ color: '#ffffff40', fontSize: 10, marginTop: 2, fontFamily: 'monospace' }}>
+                      ✓ verified as: {src.extractedTitle.slice(0, 80)}
+                      {src.extractedTitle.length > 80 ? '…' : ''}
+                    </div>
+                  )}
               </a>
             ))}
           </div>

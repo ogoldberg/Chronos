@@ -314,50 +314,44 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     let sources: unknown[] = candidates;
     if (unbrowserEnabled() && candidates.length > 0) {
       metrics.verifierRuns++;
-      // Intentionally NOT sending `year` or `author` to /v1/verify.
-      //
-      // /v1/verify's year check compares the claimed event year against
-      // the page's `datePublished` structured metadata. For primary
-      // sources of HISTORICAL works hosted on modern digital archives
-      // (Wikisource, Archive.org, Project Gutenberg), the page's
-      // datePublished is when the digital transcription was created
-      // (e.g. 2008) — NOT when the original work was authored
-      // (e.g. 1859 for Darwin). Year check always fails with a 149-year
-      // diff, dropping every real primary source.
-      //
-      // Author check has a similar shape: many digital archive pages
-      // extract structured metadata with the archivist or curator as
-      // `author`, not the original author of the work.
-      //
-      // The AI prompt already enforces year/author accuracy during
-      // discovery, and title-match + soft-404 + reachability catch
-      // the actual hallucination class we care about. Year and author
-      // cross-checking is the right shape for NEWS article
-      // verification (modern events where datePublished matches the
-      // event year) — Chronos's use case is the opposite.
+      // Send the full {url, title, year, author} claim tuple to
+      // /v1/verify. Unbrowser's archival-year-check heuristic
+      // (ogoldberg/ai-first-web-client#252) handles the case where
+      // a digital archive page has `datePublished` much later than
+      // the original work's authorship year — the year check passes
+      // with an "archival match" reason instead of rejecting every
+      // legitimate primary source. Author is still skipped because
+      // digital archive metadata frequently lists the curator as
+      // `author` rather than the original author of the work;
+      // that's a separate gap worth fixing server-side eventually.
       const verified = await verifyClaims(
         candidates.map(c => ({
           url: c.url,
           title: c.title,
+          year: typeof c.year === 'number' ? c.year : undefined,
         })),
       );
       if (verified.length === candidates.length) {
-        sources = candidates.filter((_, i) => {
-          const v = verified[i];
-          // `verified` is the authoritative flag — Unbrowser's
-          // /v1/verify treats reachability as one of its gates,
-          // so a failed reach already flips `verified` to false.
-          // We keep `reachable` as a SUB-metric to distinguish
-          // "broken URL" drops from "mismatched content" drops
-          // in the observability counters, but the keep/drop
-          // decision is driven by `verified` alone.
-          if (!v.verified) {
-            metrics.verifierDropped++;
-            if (!v.reachable) metrics.verifierUnreachable++;
-            return false;
-          }
-          return true;
-        });
+        // Enrich each surviving candidate with the extractedTitle
+        // from verifyClaims so the UI can display what Unbrowser
+        // actually saw on the page (useful for letting users
+        // see that the Wikisource transcription title said
+        // "On the Origin of Species (1859) - Wikisource" even
+        // though the AI-supplied title was shorter).
+        sources = candidates
+          .map((c, i) => {
+            const v = verified[i];
+            if (!v.verified) {
+              metrics.verifierDropped++;
+              if (!v.reachable) metrics.verifierUnreachable++;
+              return null;
+            }
+            // Merge the extractedTitle onto the candidate. Any
+            // candidate that passed verification keeps its AI-
+            // supplied metadata plus the new field.
+            return { ...c, extractedTitle: v.extractedTitle ?? undefined };
+          })
+          .filter((s): s is NonNullable<typeof s> => s !== null);
       }
       // If verified.length !== candidates.length, Unbrowser returned
       // nothing useful — fall back to the unverified candidates rather

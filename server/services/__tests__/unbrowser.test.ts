@@ -233,8 +233,14 @@ describe('verifyClaims', () => {
         year: 1859,
         author: 'Darwin',
       });
-      // Defaults propagated to the server
-      expect(body.options.titleThreshold).toBe(0.5);
+      // Defaults propagated to the server. titleThreshold is 0.25
+      // (lower than Unbrowser's 0.5 default) because AI-generated
+      // primary-source claims often include long Victorian
+      // subtitles ("...by Means of Natural Selection, or the
+      // Preservation of Favoured Races...") that don't match
+      // short archive page titles. 0.25 is the empirical floor
+      // for the Darwin/Wikisource case (3 hits / 12 claim tokens).
+      expect(body.options.titleThreshold).toBe(0.25);
       expect(body.options.rejectSoft404).toBe(true);
       expect(body.options.rejectSoftAuth).toBe(false);
     });

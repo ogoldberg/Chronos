@@ -75,6 +75,7 @@ export async function fetchPrimarySources(event: TimelineEvent): Promise<Primary
         author: typeof obj.author === 'string' ? obj.author : undefined,
         type: typeof obj.type === 'string' ? (obj.type as PrimarySource['type']) : undefined,
         relevance: typeof obj.relevance === 'string' ? obj.relevance : undefined,
+        extractedTitle: typeof obj.extractedTitle === 'string' ? obj.extractedTitle : undefined,
       });
     }
     cache.set(event.id, narrowed);

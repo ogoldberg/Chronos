@@ -94,6 +94,14 @@ export interface PrimarySource {
   type?: 'letter' | 'newspaper' | 'official' | 'witness-account' | 'scientific-paper' | 'legal-document' | 'chronicle' | 'other';
   /** One-sentence explanation of why this is a primary source for THIS event. */
   relevance?: string;
+  /**
+   * The title actually rendered on the page, extracted by Unbrowser
+   * during verification. May differ from `title` because real page
+   * titles often include publisher suffixes (e.g. "On the Origin of
+   * Species (1859) - Wikisource, the free online library"). Populated
+   * only when Unbrowser verification ran; undefined otherwise.
+   */
+  extractedTitle?: string;
 }
 
 export interface Citation {

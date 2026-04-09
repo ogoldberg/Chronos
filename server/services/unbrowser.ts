@@ -127,14 +127,34 @@ export async function verifyClaims(
       },
       body: JSON.stringify({
         sources: claims,
-        // Defaults match what Chronos used to do client-side:
-        //   - titleThreshold 0.5 (loose enough for messy titles)
-        //   - rejectSoft404 true (drop dead pages)
-        //   - rejectSoftAuth false (paywall pages still host the
-        //     content; let the route decide whether to surface them)
         options: {
-          titleThreshold: 0.5,
+          // Lower than Unbrowser's 0.5 default. Reason: AI-generated
+          // citation claims for historical works frequently include
+          // the full Victorian-era bibliographic subtitle, e.g.
+          //
+          //   Claimed: "On the Origin of Species by Means of
+          //             Natural Selection, or the Preservation of
+          //             Favoured Races in the Struggle for Life"
+          //   Page:    "On the Origin of Species (1859) - Wikisource"
+          //
+          // The claim has 12 filterable tokens after stop-word
+          // removal; the page has 8. Token overlap is exactly 3
+          // ({the, origin, species}) → 3/12 = 0.25. Anything above
+          // 0.25 rejects Darwin and every other long-titled
+          // historical work hosted on a digital archive.
+          //
+          // 0.25 is loose enough for these realistic long-vs-short
+          // title mismatches while still rejecting unrelated pages
+          // (an AI hallucination targeting a different document
+          // would have <10% token overlap). Title check stays as
+          // one of several overlapping defenses; predating check +
+          // archival year check + reachability + soft-404 do the
+          // structural correctness work.
+          titleThreshold: 0.25,
+          // Drop dead pages.
           rejectSoft404: true,
+          // Paywall pages still host the content; let the route
+          // decide whether to surface them.
           rejectSoftAuth: false,
         },
       }),
