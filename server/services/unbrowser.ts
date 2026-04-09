@@ -1,59 +1,84 @@
 /**
- * Unbrowser client — thin wrapper over the /v1/batch endpoint for
- * verifying AI-returned primary source URLs.
+ * Unbrowser client — thin wrapper over /v1/verify for citation
+ * validation.
  *
  * Why this exists: Claude's web_search tool fetches pages during its
  * research phase, so the base hallucination rate is lower than pure
  * LLM output, but there's still a class of failure where the model
  * cites a page that exists but doesn't match the claim (wrong title,
- * wrong year, a redirect to a different work, or a soft-404 page).
+ * wrong year, a redirect to a different work, soft-404, paywall).
  * We cross-check every candidate against a real browser render via
- * Unbrowser and reject mismatches before returning them to the client.
+ * Unbrowser's /v1/verify endpoint and reject mismatches before
+ * returning them to the client.
  *
- * Latency model: first-visit is expensive (2-6s full Playwright), but
- * Unbrowser's learning-pattern cache drops subsequent visits to ~76ms.
- * The server-side LRU cache in routes/sources.ts absorbs the first-
+ * Latency model: first-visit on a fresh URL is 2-6s, subsequent
+ * visits drop to ~76ms via Unbrowser's pattern cache. The
+ * server-side LRU cache in routes/sources.ts absorbs the first-
  * visit cost per event — every user after the first gets a cached
- * result in <10ms. The feature is disabled by default (opt-in via
- * UNBROWSER_API_KEY) because an unconfigured operator shouldn't pay
- * latency for a validation layer they didn't ask for.
+ * result in <10ms. Disabled by default (opt-in via UNBROWSER_API_KEY)
+ * because an unconfigured operator shouldn't pay latency for a
+ * validation layer they didn't ask for.
+ *
+ * History: this module previously called /v1/batch and ran its own
+ * client-side title-matching logic (~30 lines). After Unbrowser
+ * shipped /v1/verify (which composes browse + signals + extraction
+ * + authority + title-match into a single endpoint), we collapsed
+ * the wrapper to a thin call-and-shape adapter. The local
+ * `titleMatches` helper is gone — Unbrowser does the matching
+ * server-side now using the same algorithm we used to use, but
+ * with Unicode support and acronym preservation we never had.
  */
 
+/**
+ * The shape Chronos's sources route expects from this module.
+ * Mirrors the `/v1/verify` per-source result but flattened to the
+ * fields the route actually reads.
+ */
 export interface VerifiedSource {
   url: string;
-  /** Title as actually rendered on the page. May differ from claimed. */
+  /** True if every gating + claim check passed on the verify side. */
+  verified: boolean;
+  /** Title actually rendered on the page, for diagnostics. */
   extractedTitle: string | null;
-  /** True if the URL resolved to a page with content. */
+  /** True if the URL fetched successfully (any pass on reachability). */
   reachable: boolean;
-  /** How long Unbrowser took — useful for logging slow first-visits. */
-  loadTimeMs: number;
 }
 
-interface BrowseResult {
+/**
+ * The shape Unbrowser's /v1/verify endpoint returns. Only the
+ * fields Chronos actually reads — Unbrowser's full response carries
+ * extracted metadata, authority, per-check details, etc., which
+ * we currently ignore. Future enhancements (richer EventCard
+ * display, authority badges) can extend this interface.
+ */
+interface VerifyResponseSource {
+  url: string;
+  verified: boolean;
+  confidence: number;
+  extractedTitle?: string;
+  checks?: {
+    reachable?: { passed: boolean };
+  };
+  error?: string;
+}
+
+interface VerifyResponse {
   success: boolean;
   data?: {
-    url: string;
-    title?: string;
-    metadata?: {
-      loadTime?: number;
-      tier?: string;
-      cached?: boolean;
-    };
+    results?: VerifyResponseSource[];
   };
   error?: { code: string; message: string };
 }
 
-interface BatchResponse {
-  success: boolean;
-  data?: {
-    results?: BrowseResult[];
-  };
-  results?: BrowseResult[];
-  error?: { code: string; message: string };
-}
+const VERIFY_TIMEOUT_MS = 60_000; // /v1/verify can take 30s per source
 
-const UNBROWSER_BASE = process.env.UNBROWSER_BASE_URL || 'https://api.unbrowser.ai';
-const BATCH_TIMEOUT_MS = 30_000;
+/**
+ * Resolve the Unbrowser base URL per-call so env changes (including
+ * test overrides) take effect without needing a module reload.
+ */
+function getBaseUrl(): string {
+  return process.env.UNBROWSER_BASE_URL || 'https://api.unbrowser.ai';
+}
 
 /**
  * True if Unbrowser verification is configured and enabled. When this
@@ -65,60 +90,80 @@ export function unbrowserEnabled(): boolean {
 }
 
 /**
- * Verify a batch of URLs via Unbrowser's /v1/batch endpoint.
- * Returns one VerifiedSource per input URL, in the same order, so
- * callers can zip them back against the AI output.
+ * Verify a batch of AI-claimed primary source citations via
+ * Unbrowser's /v1/verify endpoint. Each input is a {url, claim}
+ * tuple; the response includes per-source verification results.
+ *
+ * The claim object lets Unbrowser run server-side title/year/author
+ * cross-checks against the page's structured data. Claims are
+ * optional — pass an empty object to just check reachability and
+ * the gating signals (soft-404, etc.).
  *
  * On any transport-level failure (network error, timeout, Unbrowser
- * down, missing key) this returns an empty array — the caller treats
- * that as "no verification possible" and falls back to the raw AI
- * output rather than failing the whole request.
+ * down, missing key) this returns an empty array — the caller
+ * treats that as "no verification possible" and falls back to the
+ * raw AI output rather than failing the whole request.
  */
-export async function verifyUrls(urls: string[]): Promise<VerifiedSource[]> {
-  if (!unbrowserEnabled() || urls.length === 0) return [];
+export async function verifyClaims(
+  claims: Array<{
+    url: string;
+    title?: string;
+    year?: number;
+    author?: string;
+  }>,
+): Promise<VerifiedSource[]> {
+  if (!unbrowserEnabled() || claims.length === 0) return [];
 
   const apiKey = process.env.UNBROWSER_API_KEY!;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), BATCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
 
   try {
-    const resp = await fetch(`${UNBROWSER_BASE}/v1/batch`, {
+    const resp = await fetch(`${getBaseUrl()}/v1/verify`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        urls,
-        // text + tiny maxChars keeps the response small — we only need
-        // the title field for validation, not the body content. Unbrowser
-        // still renders the page fully to extract the title accurately.
-        options: { contentType: 'text', maxChars: 200 },
+        sources: claims,
+        // Defaults match what Chronos used to do client-side:
+        //   - titleThreshold 0.5 (loose enough for messy titles)
+        //   - rejectSoft404 true (drop dead pages)
+        //   - rejectSoftAuth false (paywall pages still host the
+        //     content; let the route decide whether to surface them)
+        options: {
+          titleThreshold: 0.5,
+          rejectSoft404: true,
+          rejectSoftAuth: false,
+        },
       }),
       signal: controller.signal,
     });
 
     if (!resp.ok) return [];
 
-    const json = (await resp.json()) as BatchResponse;
-    // The batch endpoint's response shape has drifted historically —
-    // tolerate both `{data: {results}}` and flat `{results}` so this
-    // doesn't break if the wrapper layer changes again.
-    const results: BrowseResult[] = (json.data?.results ?? json.results ?? []) as BrowseResult[];
+    const json = (await resp.json()) as VerifyResponse;
+    const results = json.data?.results ?? [];
 
-    // Align by position with the input URLs. Unbrowser returns results
-    // in request order, but if anything goes wrong and the arrays drift
-    // out of sync, fall back to a null entry for that index.
-    return urls.map((url, i) => {
+    // Unbrowser's /v1/verify returns exactly one result per source in
+    // request order. If the lengths don't match, something went wrong
+    // at the server layer — return [] so the caller's length-guard
+    // falls back to unverified candidates rather than silently
+    // treating every claim as unreachable.
+    if (results.length !== claims.length) return [];
+
+    // Align by position with the input claims.
+    return claims.map((claim, i) => {
       const r = results[i];
-      if (!r || !r.success || !r.data) {
-        return { url, extractedTitle: null, reachable: false, loadTimeMs: 0 };
+      if (r.error) {
+        return { url: claim.url, verified: false, extractedTitle: null, reachable: false };
       }
       return {
-        url,
-        extractedTitle: r.data.title ?? null,
-        reachable: true,
-        loadTimeMs: r.data.metadata?.loadTime ?? 0,
+        url: claim.url,
+        verified: r.verified,
+        extractedTitle: r.extractedTitle ?? null,
+        reachable: r.checks?.reachable?.passed ?? false,
       };
     });
   } catch {
@@ -126,39 +171,4 @@ export async function verifyUrls(urls: string[]): Promise<VerifiedSource[]> {
   } finally {
     clearTimeout(timer);
   }
-}
-
-/**
- * Decide whether a claimed title plausibly matches an extracted page
- * title. We're deliberately loose — the goal is to catch clear hallucin-
- * ations (AI claimed "Origin of Species", page title is "A Brief History
- * of Everything"), not to enforce exact-string matching (page titles
- * routinely include publisher/site suffixes like " - Wikisource", year
- * parentheticals, edition markers, etc.).
- *
- * Algorithm: lowercase both, strip non-alphanumeric, tokenize into
- * 3+-char words, require at least 50% of the AI-claimed words to
- * appear in the extracted title. Empty claimed title → always matches
- * (we trust AI when we have no baseline). Empty extracted title →
- * never matches.
- */
-export function titleMatches(claimed: string, extracted: string | null): boolean {
-  if (!claimed) return true;
-  if (!extracted) return false;
-  const tokenize = (s: string): Set<string> =>
-    new Set(
-      s
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .split(/\s+/)
-        .filter(w => w.length >= 3),
-    );
-  const claimedTokens = tokenize(claimed);
-  if (claimedTokens.size === 0) return true;
-  const extractedTokens = tokenize(extracted);
-  let hits = 0;
-  for (const t of claimedTokens) {
-    if (extractedTokens.has(t)) hits++;
-  }
-  return hits / claimedTokens.size >= 0.5;
 }
