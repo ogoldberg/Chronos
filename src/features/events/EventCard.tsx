@@ -31,12 +31,22 @@ const EVENT_ACTION_STYLE: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+interface RelatedEvent {
+  title: string;
+  year?: number;
+  relation: string;
+  description?: string;
+  wiki?: string;
+}
+
 export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [wiki, setWiki] = useState<WikiData | null>(null);
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<PrimarySource[]>([]);
   const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null);
   const [verifiedCitations, setVerifiedCitations] = useState<Citation[]>([]);
+  const [relatedEvents, setRelatedEvents] = useState<RelatedEvent[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
   // Wikipedia section expanded state. When collapsed we clamp the extract
   // at ~120px with a fade mask; when expanded the full article text flows
   // inline and the card itself scrolls to accommodate it.
@@ -68,6 +78,21 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
     factCheckEvent(event.title, event.year, event.description)
       .then(setFactCheck)
       .catch(() => {});
+  };
+
+  // Wikidata graph: discover related events (free, no AI)
+  const loadRelatedEvents = () => {
+    if (relatedEvents.length > 0 || !event.wiki) return;
+    setRelatedLoading(true);
+    fetch('/api/events/related', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wikiTitle: event.wiki }),
+    })
+      .then(r => r.json())
+      .then(data => setRelatedEvents(data.related || []))
+      .catch(() => {})
+      .finally(() => setRelatedLoading(false));
   };
 
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -608,6 +633,78 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
                     </div>
                   )}
               </a>
+            ))}
+          </div>
+        )}
+
+        {/* Related Events — Wikidata graph (free, no AI) */}
+        {event.wiki && relatedEvents.length === 0 && !relatedLoading && (
+          <button
+            onClick={loadRelatedEvents}
+            style={{
+              ...EVENT_ACTION_STYLE,
+              marginBottom: 12,
+              padding: '6px 12px',
+              background: 'rgba(255,255,255,0.04)',
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            Discover related events
+          </button>
+        )}
+        {relatedLoading && (
+          <div style={{ fontSize: 12, color: '#ffffff50', marginBottom: 12 }}>
+            Exploring connections...
+          </div>
+        )}
+        {relatedEvents.length > 0 && (
+          <div style={{
+            background: 'rgba(255,255,255,0.04)',
+            borderRadius: 10,
+            padding: 14,
+            marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 11, color: '#ffffff45', fontWeight: 600, letterSpacing: 0.8, marginBottom: 8 }}>
+              CONNECTED EVENTS
+            </div>
+            {relatedEvents.slice(0, 8).map((rel, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: '6px 0',
+                  borderBottom: i < Math.min(relatedEvents.length, 8) - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{
+                    fontSize: 9,
+                    color: rel.relation === 'Caused by' ? '#f59e0b' :
+                           rel.relation === 'Led to' ? '#22c55e' :
+                           rel.relation === 'Followed by' ? '#22c55e' :
+                           '#60a5fa',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    flexShrink: 0,
+                  }}>
+                    {rel.relation}
+                  </span>
+                </div>
+                <div style={{ color: '#ffffffcc', fontSize: 12, fontWeight: 500, marginTop: 2 }}>
+                  {rel.title}
+                  {rel.year !== undefined && (
+                    <span style={{ color: '#ffffff50', fontWeight: 400, marginLeft: 6, fontFamily: 'monospace', fontSize: 11 }}>
+                      {rel.year < 0 ? `${Math.abs(rel.year)} BCE` : rel.year}
+                    </span>
+                  )}
+                </div>
+                {rel.description && (
+                  <div style={{ color: '#ffffff60', fontSize: 11, marginTop: 2, lineHeight: 1.4, fontStyle: 'italic' }}>
+                    {rel.description.slice(0, 120)}{rel.description.length > 120 ? '...' : ''}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}

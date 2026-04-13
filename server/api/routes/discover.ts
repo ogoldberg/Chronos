@@ -137,11 +137,18 @@ async function discoverFromWikidata(
       seen.add(label);
 
       const dateStr = binding.date?.value;
-      const year = dateStr ? new Date(dateStr).getFullYear() : NaN;
-      if (isNaN(year)) continue;
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      const intYear = d.getFullYear();
+      if (isNaN(intYear)) continue;
+      // Use fractional year for sub-year positioning (e.g., July 14 = 1789.53)
+      // so events in the same year spread out when zoomed in
+      const dayOfYear = (d.getTime() - new Date(intYear, 0, 1).getTime()) / (1000 * 60 * 60 * 24);
+      const year = intYear + dayOfYear / 365.25;
 
       const wikiTitle = binding.articleTitle?.value;
       const description = label;
+      const timestamp = dateStr.slice(0, 10); // ISO date for precision
 
       // Parse coordinates if available
       let lat: number | undefined;
@@ -157,6 +164,8 @@ async function discoverFromWikidata(
       results.push({
         title: label,
         year,
+        timestamp,
+        precision: timestamp.endsWith('01-01') ? 'year' : 'day',
         description,
         category,
         color: getCategoryColor(category),

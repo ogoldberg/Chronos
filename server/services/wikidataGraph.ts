@@ -1,0 +1,375 @@
+/**
+ * Wikidata Graph Service
+ *
+ * Leverages Wikidata's SPARQL endpoint to extract rich graph relationships
+ * between historical events: causes, effects, sub-events, participants,
+ * chronological chains, and geographic context.
+ */
+
+const WIKIDATA_SPARQL = 'https://query.wikidata.org/sparql';
+const USER_AGENT = 'Chronos/1.0 (https://github.com/chronos; contact@chronos.app)';
+
+// ── Types ────────────────────────────────────────────────────────────
+
+export interface WikidataEntity {
+  qid: string;
+  label: string;
+  description?: string;
+  year?: number;
+  date?: string;
+  wikipediaTitle?: string;
+}
+
+export interface EventRelation {
+  relation: 'caused_by' | 'led_to' | 'part_of' | 'includes' | 'follows' | 'followed_by';
+  entity: WikidataEntity;
+}
+
+export interface EventContext {
+  qid: string;
+  label: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  country?: string;
+  location?: string;
+  coordinates?: { lat: number; lng: number };
+  participants: WikidataEntity[];
+  relations: EventRelation[];
+  image?: string;
+}
+
+export interface EnrichedDiscoveryEvent {
+  title: string;
+  year: number;
+  description: string;
+  category: string;
+  color: string;
+  wiki?: string;
+  qid?: string;
+  lat?: number;
+  lng?: number;
+  geoType?: string;
+  connections?: Array<{
+    targetTitle: string;
+    targetYear?: number;
+    label: string;
+    type: 'cause' | 'effect' | 'related' | 'part_of';
+  }>;
+}
+
+// ── SPARQL helpers ───────────────────────────────────────────────────
+
+async function sparql(query: string): Promise<any[]> {
+  const url = `${WIKIDATA_SPARQL}?query=${encodeURIComponent(query)}&format=json`;
+  const resp = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+  if (!resp.ok) return [];
+  const data = await resp.json();
+  return data.results?.bindings ?? [];
+}
+
+// ── Resolve Wikipedia title to Wikidata QID ─────────────────────────
+
+const qidCache = new Map<string, string | null>();
+
+export async function resolveQID(wikipediaTitle: string): Promise<string | null> {
+  if (qidCache.has(wikipediaTitle)) return qidCache.get(wikipediaTitle) ?? null;
+
+  const bindings = await sparql(`
+    SELECT ?item WHERE {
+      ?article schema:about ?item ;
+               schema:isPartOf <https://en.wikipedia.org/> ;
+               schema:name "${wikipediaTitle.replace(/"/g, '\\"')}"@en .
+    } LIMIT 1
+  `);
+
+  const qid = bindings[0]?.item?.value?.replace('http://www.wikidata.org/entity/', '') ?? null;
+  qidCache.set(wikipediaTitle, qid);
+  return qid;
+}
+
+// ── Fetch full event context from graph ─────────────────────────────
+
+export async function getEventContext(qid: string): Promise<EventContext | null> {
+  const bindings = await sparql(`
+    SELECT
+      ?label ?description ?startDate ?endDate
+      ?country ?countryLabel ?location ?locationLabel
+      ?coord ?image
+    WHERE {
+      BIND(wd:${qid} AS ?event)
+      ?event rdfs:label ?label . FILTER(LANG(?label) = "en")
+      OPTIONAL { ?event schema:description ?description . FILTER(LANG(?description) = "en") }
+      OPTIONAL { ?event wdt:P580 ?startDate }
+      OPTIONAL { ?event wdt:P582 ?endDate }
+      OPTIONAL { ?event wdt:P17 ?country }
+      OPTIONAL { ?event wdt:P276 ?location }
+      OPTIONAL { ?event wdt:P625 ?coord }
+      OPTIONAL { ?event wdt:P18 ?image }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+    } LIMIT 1
+  `);
+
+  if (bindings.length === 0) return null;
+  const b = bindings[0];
+
+  let coordinates: { lat: number; lng: number } | undefined;
+  if (b.coord?.value) {
+    const match = b.coord.value.match(/Point\(([^ ]+) ([^ ]+)\)/);
+    if (match) coordinates = { lat: parseFloat(match[2]!), lng: parseFloat(match[1]!) };
+  }
+
+  // Fetch participants
+  const participantBindings = await sparql(`
+    SELECT ?participant ?participantLabel ?participantDescription WHERE {
+      wd:${qid} wdt:P710 ?participant .
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+      OPTIONAL { ?participant schema:description ?participantDescription . FILTER(LANG(?participantDescription) = "en") }
+    } LIMIT 20
+  `);
+
+  const participants: WikidataEntity[] = participantBindings
+    .filter(pb => !pb.participantLabel?.value?.startsWith('Q'))
+    .map(pb => ({
+      qid: pb.participant?.value?.replace('http://www.wikidata.org/entity/', '') ?? '',
+      label: pb.participantLabel?.value ?? '',
+      description: pb.participantDescription?.value,
+    }));
+
+  // Fetch relations (causes, effects, parts, chronological)
+  const relationBindings = await sparql(`
+    SELECT ?relation ?related ?relatedLabel ?relatedDate ?relatedDescription WHERE {
+      {
+        wd:${qid} wdt:P828 ?related .
+        BIND("caused_by" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P1542 ?related .
+        BIND("led_to" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P527 ?related .
+        BIND("includes" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P155 ?related .
+        BIND("follows" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P156 ?related .
+        BIND("followed_by" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P361 ?related .
+        BIND("part_of" AS ?relation)
+      } UNION {
+        ?related wdt:P361 wd:${qid} .
+        BIND("includes" AS ?relation)
+      }
+      OPTIONAL { ?related wdt:P585 ?relatedDate }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+      OPTIONAL { ?related schema:description ?relatedDescription . FILTER(LANG(?relatedDescription) = "en") }
+    } LIMIT 50
+  `);
+
+  const relations: EventRelation[] = relationBindings
+    .filter(rb => !rb.relatedLabel?.value?.startsWith('Q'))
+    .map(rb => {
+      const dateStr = rb.relatedDate?.value;
+      const year = dateStr ? new Date(dateStr).getFullYear() : undefined;
+      return {
+        relation: rb.relation?.value as EventRelation['relation'],
+        entity: {
+          qid: rb.related?.value?.replace('http://www.wikidata.org/entity/', '') ?? '',
+          label: rb.relatedLabel?.value ?? '',
+          description: rb.relatedDescription?.value,
+          year,
+          date: dateStr?.slice(0, 10),
+        },
+      };
+    });
+
+  return {
+    qid,
+    label: b.label?.value ?? '',
+    description: b.description?.value,
+    startDate: b.startDate?.value?.slice(0, 10),
+    endDate: b.endDate?.value?.slice(0, 10),
+    country: b.countryLabel?.value,
+    location: b.locationLabel?.value,
+    coordinates,
+    participants,
+    relations,
+    image: b.image?.value,
+  };
+}
+
+// ── Enrich discovered events with graph connections ─────────────────
+
+/**
+ * Given a batch of discovered events (with wiki titles), enrich them
+ * with Wikidata graph relationships. Adds connections, coordinates,
+ * and descriptions from the knowledge graph.
+ *
+ * Runs in parallel with concurrency limit to avoid overloading Wikidata.
+ */
+export async function enrichEventsWithGraph(
+  events: EnrichedDiscoveryEvent[],
+  maxConcurrent = 3,
+): Promise<EnrichedDiscoveryEvent[]> {
+  const enriched = [...events];
+  const queue = events
+    .map((e, i) => ({ event: e, index: i }))
+    .filter(({ event }) => event.wiki);
+
+  const process = async (item: { event: EnrichedDiscoveryEvent; index: number }) => {
+    try {
+      const qid = await resolveQID(item.event.wiki!);
+      if (!qid) return;
+
+      const context = await getEventContext(qid);
+      if (!context) return;
+
+      const enrichedEvent = { ...enriched[item.index]!, qid };
+
+      // Add coordinates if missing
+      if (!enrichedEvent.lat && context.coordinates) {
+        enrichedEvent.lat = context.coordinates.lat;
+        enrichedEvent.lng = context.coordinates.lng;
+        enrichedEvent.geoType = 'point';
+      }
+
+      // Add richer description
+      if (context.description && (!enrichedEvent.description || enrichedEvent.description === enrichedEvent.title)) {
+        enrichedEvent.description = context.description;
+      }
+
+      // Build connections from relations
+      const connections: EnrichedDiscoveryEvent['connections'] = [];
+
+      for (const rel of context.relations) {
+        if (connections.length >= 5) break;
+        let label: string;
+        let type: 'cause' | 'effect' | 'related' | 'part_of';
+
+        switch (rel.relation) {
+          case 'caused_by':
+            label = `Caused by: ${rel.entity.label}`;
+            type = 'cause';
+            break;
+          case 'led_to':
+            label = `Led to: ${rel.entity.label}`;
+            type = 'effect';
+            break;
+          case 'part_of':
+            label = `Part of: ${rel.entity.label}`;
+            type = 'part_of';
+            break;
+          case 'includes':
+            label = `Includes: ${rel.entity.label}`;
+            type = 'related';
+            break;
+          case 'follows':
+            label = `Follows: ${rel.entity.label}`;
+            type = 'related';
+            break;
+          case 'followed_by':
+            label = `Followed by: ${rel.entity.label}`;
+            type = 'effect';
+            break;
+          default:
+            continue;
+        }
+
+        connections.push({
+          targetTitle: rel.entity.label,
+          targetYear: rel.entity.year,
+          label,
+          type,
+        });
+      }
+
+      if (connections.length > 0) {
+        enrichedEvent.connections = connections;
+      }
+
+      enriched[item.index] = enrichedEvent;
+    } catch {
+      // Enrichment is best-effort
+    }
+  };
+
+  // Process with concurrency limit
+  for (let i = 0; i < queue.length; i += maxConcurrent) {
+    const batch = queue.slice(i, i + maxConcurrent);
+    await Promise.all(batch.map(process));
+  }
+
+  return enriched;
+}
+
+// ── Discover related events for a single event ──────────────────────
+
+/**
+ * Given an event's Wikipedia title, find related events through the
+ * Wikidata graph. Returns events connected by cause/effect, part-of,
+ * chronological, or shared participant relationships.
+ */
+export async function discoverRelatedEvents(
+  wikipediaTitle: string,
+): Promise<Array<{ title: string; year?: number; relation: string; description?: string; wiki?: string }>> {
+  const qid = await resolveQID(wikipediaTitle);
+  if (!qid) return [];
+
+  const bindings = await sparql(`
+    SELECT DISTINCT ?relation ?related ?relatedLabel ?relatedDate ?relatedDescription ?articleTitle WHERE {
+      {
+        wd:${qid} wdt:P828 ?related . BIND("Caused by" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P1542 ?related . BIND("Led to" AS ?relation)
+      } UNION {
+        ?related wdt:P361 wd:${qid} . BIND("Part of this" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P361 ?parent .
+        ?related wdt:P361 ?parent .
+        FILTER(?related != wd:${qid})
+        BIND("Related event" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P155 ?related . BIND("Preceded by" AS ?relation)
+      } UNION {
+        wd:${qid} wdt:P156 ?related . BIND("Followed by" AS ?relation)
+      }
+      OPTIONAL { ?related wdt:P585 ?relatedDate }
+      OPTIONAL {
+        ?article schema:about ?related ;
+                 schema:isPartOf <https://en.wikipedia.org/> ;
+                 schema:name ?articleTitle .
+      }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+      OPTIONAL { ?related schema:description ?relatedDescription . FILTER(LANG(?relatedDescription) = "en") }
+    }
+    LIMIT 30
+  `);
+
+  return bindings
+    .filter(b => !b.relatedLabel?.value?.startsWith('Q'))
+    .map(b => {
+      const dateStr = b.relatedDate?.value;
+      return {
+        title: b.relatedLabel?.value ?? '',
+        year: dateStr ? new Date(dateStr).getFullYear() : undefined,
+        relation: b.relation?.value ?? '',
+        description: b.relatedDescription?.value,
+        wiki: b.articleTitle?.value,
+      };
+    });
+}
+
+// ── Cache ────────────────────────────────────────────────────────────
+
+const contextCache = new Map<string, { context: EventContext; fetchedAt: number }>();
+const CONTEXT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+export async function getCachedEventContext(qid: string): Promise<EventContext | null> {
+  const cached = contextCache.get(qid);
+  if (cached && Date.now() - cached.fetchedAt < CONTEXT_CACHE_TTL) return cached.context;
+
+  const context = await getEventContext(qid);
+  if (context) contextCache.set(qid, { context, fetchedAt: Date.now() });
+  return context;
+}
