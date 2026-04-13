@@ -219,12 +219,14 @@ export default function PeriodCard({
           paddingTop: 14,
           borderTop: '1px solid var(--hairline, rgba(255,255,255,0.08))',
         }}>
-          <button
-            onClick={() => onZoomIn(year, viewportSpan / 8)}
-            style={periodActionBtn}
-          >
-            Zoom into this period &rarr;
-          </button>
+          {viewportSpan / 8 >= 1 / 12 && (
+            <button
+              onClick={() => onZoomIn(year, viewportSpan / 8)}
+              style={periodActionBtn}
+            >
+              Zoom into this period &rarr;
+            </button>
+          )}
           <button
             onClick={() => onAskGuide(`Tell me what was happening around ${periodLabel}. What were the major events, daily life, and turning points? What's worth knowing about this moment in history?`)}
             style={periodActionBtn}

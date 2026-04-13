@@ -1,5 +1,20 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+
+/**
+ * Strip Anthropic web_search citation markers (<cite index="...">...</cite>)
+ * while preserving the quoted text. Tag fragments may appear mid-stream;
+ * we regex globally so partial streams render cleanly even before the
+ * closing tag arrives.
+ */
+function stripCitationTags(s: string): string {
+  return s
+    .replace(/<cite\s+index="[^"]*"\s*>/g, '')
+    .replace(/<\/cite>/g, '')
+    // Handle the mid-stream case where only the opening "<cite" has arrived
+    // — hide it until the rest of the tag lands.
+    .replace(/<cite[^>]*$/g, '');
+}
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage, Viewport, TimelineEvent, TourStop } from '../../types';
 import { formatYear, formatYearShort, scaleLabel } from '../../utils/format';
@@ -160,12 +175,17 @@ export default function ChatPanel({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Guard against StrictMode double-invoke in dev and against parent
+  // re-renders that hand us the same initialMessage. Only send a given
+  // initial message once per value.
+  const lastInitialRef = useRef<string | null>(null);
   useEffect(() => {
-    if (initialMessage) {
+    if (initialMessage && lastInitialRef.current !== initialMessage) {
+      lastInitialRef.current = initialMessage;
       setOpen(true);
       sendMessage(initialMessage);
     }
-  }, [initialMessage]);
+  }, [initialMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const buildContext = useCallback(() => {
     const left = viewport.centerYear - viewport.span / 2;
@@ -298,6 +318,18 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
               }));
             if (newEvents.length > 0) {
               onAddEvents(newEvents);
+              // Persist to DB so chat-discovered events survive restarts
+              // and appear for any future viewer of this region. Fire
+              // and forget — the local timeline is already updated and
+              // a failed ingest just means we'll re-learn next session.
+              fetch('/api/events/ingest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  source: 'chat',
+                  events: rawEvents.filter((e: any) => e.title && e.year != null),
+                }),
+              }).catch(() => {});
             }
           }
         } catch (e) {
@@ -531,7 +563,7 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
                     ),
                   }}
                 >
-                  {msg.content}
+                  {stripCitationTags(msg.content)}
                 </ReactMarkdown>
               )}
             </div>
