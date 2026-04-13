@@ -63,8 +63,16 @@ export function useCustomThemeDiscovery({
     if (!enabled) return;
     // Only user-authored themes trigger an API call — built-ins work
     // off the shared dataset and don't need per-topic discovery.
+    // Discovery runs once when a custom theme is first activated,
+    // not on every viewport scroll (to avoid automatic AI costs).
     const customs = activeThemes.filter(t => t.custom);
     if (customs.length === 0) return;
+
+    // Skip if all custom themes already have cached results for any cell
+    const allCached = customs.every(t =>
+      [...cacheRef.current.keys()].some(k => k.startsWith(`${t.id}:`))
+    );
+    if (allCached) return;
 
     clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {

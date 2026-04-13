@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatYear } from '../../utils/format';
@@ -21,9 +21,8 @@ interface Props {
 
 /**
  * Overlay card that appears inside the GlobePanel when the user clicks a
- * region. Fetches /api/region for the clicked lat/lng + current year and
- * renders the structured response. Handles its own loading and error states
- * so the globe remains interactive while the AI is thinking.
+ * region. Shows region info header immediately; AI-generated history is
+ * only fetched when the user clicks "Explore history".
  */
 export default function RegionInfoCard({
   lat,
@@ -34,13 +33,11 @@ export default function RegionInfoCard({
   onAskGuide,
 }: Props) {
   const [info, setInfo] = useState<RegionInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchRegionInfo = () => {
     setLoading(true);
-    setInfo(null);
     setError(null);
 
     fetch('/api/region', {
@@ -50,7 +47,6 @@ export default function RegionInfoCard({
     })
       .then(async r => {
         const data = await r.json();
-        if (cancelled) return;
         if (!r.ok) {
           setError(data?.error || `Server returned ${r.status}`);
         } else if (data?.placeName && data?.summary) {
@@ -60,16 +56,12 @@ export default function RegionInfoCard({
         }
       })
       .catch(e => {
-        if (!cancelled) setError(e.message || 'Network error');
+        setError(e.message || 'Network error');
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [lat, lng, year, regionName]);
+  };
 
   const yearLabel = formatYear(year);
 
@@ -107,7 +99,7 @@ export default function RegionInfoCard({
               marginBottom: 2,
             }}
           >
-            {info?.era || regionName} · {yearLabel}
+            {info?.era || regionName} {'\u00b7'} {yearLabel}
           </div>
           <h3
             style={{
@@ -123,7 +115,7 @@ export default function RegionInfoCard({
             {info?.placeName || regionName}
           </h3>
           <div style={{ fontSize: 10, color: '#ffffff60', marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            {lat.toFixed(2)}°, {lng.toFixed(2)}°
+            {lat.toFixed(2)}{'\u00b0'}, {lng.toFixed(2)}{'\u00b0'}
           </div>
         </div>
         <button
@@ -141,15 +133,34 @@ export default function RegionInfoCard({
             lineHeight: 1,
           }}
         >
-          ×
+          {'\u00d7'}
         </button>
       </div>
 
       {/* Body */}
       <div style={{ marginTop: 10 }}>
+        {!info && !loading && !error && (
+          <button
+            onClick={fetchRegionInfo}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'rgba(59,130,246,0.15)',
+              border: '1px solid rgba(59,130,246,0.35)',
+              color: '#60a5fa',
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Explore history of this region
+          </button>
+        )}
+
         {loading && (
           <div style={{ fontSize: 12, color: '#ffffff80' }}>
-            <span className="pulse-dot" /> Asking the guide about this region…
+            Asking the guide about this region...
           </div>
         )}
 

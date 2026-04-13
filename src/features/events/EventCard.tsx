@@ -42,6 +42,7 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
   // inline and the card itself scrolls to accommodate it.
   const [wikiExpanded, setWikiExpanded] = useState(false);
 
+  // Wikipedia summary + citation verification (non-AI, free)
   useEffect(() => {
     if (event.wiki) {
       setLoading(true);
@@ -52,22 +53,22 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
     verifyCitations(event.citations, event.wiki)
       .then(setVerifiedCitations)
       .catch(() => {});
-    if (event.source === 'discovered') {
-      factCheckEvent(event.title, event.year, event.description)
-        .then(setFactCheck)
-        .catch(() => {});
-    }
-    // Primary-source discovery. `fetchPrimarySources` handles curated
-    // events, sentinel short-circuit, prehistoric short-circuit, and the
-    // AI-backed discovery path internally — we just fire and forget.
+  }, [event.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // AI-powered features — only fetched on user request
+  const loadPrimarySources = () => {
+    if (sources.length > 0) return;
     fetchPrimarySources(event)
       .then(setSources)
       .catch(() => setSources([]));
-    // Depend on event.id only. Including the whole `event` object (or
-    // nested fields) refires on every parent re-render that produces a
-    // new reference, spamming /api/sources/primary and the fact-check
-    // endpoint. Per-event identity is what we actually care about.
-  }, [event.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+
+  const loadFactCheck = () => {
+    if (factCheck) return;
+    factCheckEvent(event.title, event.year, event.description)
+      .then(setFactCheck)
+      .catch(() => {});
+  };
 
   const [imgLoaded, setImgLoaded] = useState(false);
 
@@ -207,7 +208,28 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
             </span>
           )}
         </div>
-        {/* Fact-check badge for discovered events */}
+        {/* Fact-check badge for discovered events — loaded on demand */}
+        {event.source === 'discovered' && !factCheck && (
+          <button
+            onClick={loadFactCheck}
+            style={{
+              display: 'inline-block',
+              padding: '2px 8px',
+              borderRadius: 10,
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              marginBottom: 12,
+              marginLeft: 6,
+              background: 'rgba(255,255,255,0.06)',
+              color: '#ffffff70',
+              border: '1px solid rgba(255,255,255,0.1)',
+              cursor: 'pointer',
+            }}
+          >
+            Verify this event
+          </button>
+        )}
         {factCheck && (
           <div style={{
             display: 'inline-block',
@@ -509,11 +531,22 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </div>
         )}
 
-        {/* Primary Sources — hidden entirely when the discovery pipeline
-            returns [], which is the right answer for sentinel events,
-            prehistoric events, and anything the AI couldn't verify. No
-            empty header, no "no sources found" message — absence is
-            honest. */}
+        {/* Primary Sources — opt-in AI discovery */}
+        {sources.length === 0 && (
+          <button
+            onClick={loadPrimarySources}
+            style={{
+              ...EVENT_ACTION_STYLE,
+              marginBottom: 12,
+              padding: '6px 12px',
+              background: 'rgba(255,255,255,0.04)',
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            Find primary sources
+          </button>
+        )}
         {sources.length > 0 && (
           <div style={{
             background: 'rgba(255,255,255,0.04)',

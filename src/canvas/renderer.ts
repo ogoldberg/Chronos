@@ -219,6 +219,27 @@ export function renderTimeline(
       ctx.textAlign = nearRightEdge ? 'right' : 'center';
       ctx.fillText('TODAY', nearRightEdge ? nowX - 4 : nowX, timelineY - 28);
     }
+
+    // Future zone: any pixels to the right of `now` that fall on
+    // screen. We shade the band faintly and stamp "FUTURE" on it so
+    // the space past the TODAY marker reads as a deliberate region
+    // rather than a broken edge. Only drawn when `now` is actually
+    // within (or left of) the visible range — otherwise there's
+    // nothing "after" to annotate on this view.
+    if (now <= right) {
+      const futureLeftX = Math.max(0, yearToPixel(now, vp, W));
+      if (futureLeftX < W - 1) {
+        ctx.fillStyle = 'rgba(246, 183, 60, 0.04)';
+        ctx.fillRect(futureLeftX, 0, W - futureLeftX, H);
+        ctx.font = `500 11px "General Sans", -apple-system, sans-serif`;
+        ctx.fillStyle = '#f6b73c55';
+        ctx.textAlign = 'center';
+        const labelX = futureLeftX + (W - futureLeftX) / 2;
+        if (W - futureLeftX > 40) {
+          ctx.fillText('FUTURE', labelX, timelineY + 42);
+        }
+      }
+    }
   }
 
   // Filter visible events
@@ -339,15 +360,30 @@ export function renderTimeline(
 
   // Layout and render unclustered events normally
   const hitTargets: HitTarget[] = [];
-  const placed: { x: number; y: number }[] = [];
+  // Track placed label bounding boxes for overlap prevention
+  const placedLabels: { x: number; y: number; halfW: number }[] = [];
+
+  // Pre-measure title widths for overlap-aware placement
+  ctx.font = '400 12px "Fraunces", "Iowan Old Style", Georgia, serif';
+  const titleWidths = new Map<string, number>();
+  for (const item of eventPositions) {
+    if (!clusteredIds.has(item.ev.id)) {
+      titleWidths.set(item.ev.id, ctx.measureText(item.ev.title).width);
+    }
+  }
 
   for (const item of eventPositions) {
     if (clusteredIds.has(item.ev.id)) continue;
 
     const ev = item.ev;
     const x = item.x;
+    const titleHalfW = (titleWidths.get(ev.id) ?? 60) / 2 + 8; // half-width + padding
 
     let evY: number;
+
+    // Check if two labels overlap horizontally given their measured widths
+    const labelsOverlapX = (px: number, pHalfW: number) =>
+      Math.abs(px - x) < (pHalfW + titleHalfW);
 
     if (lanesActive) {
       // Place event in its region lane
@@ -358,8 +394,8 @@ export function renderTimeline(
         evY = laneStartY + (laneIdx + 1) * laneHeight;
         // Micro-stagger within lane to avoid overlap
         let stagger = 0;
-        for (const p of placed) {
-          if (Math.abs(p.x - x) < 50 && Math.abs(p.y - evY) < laneHeight * 0.4) {
+        for (const p of placedLabels) {
+          if (labelsOverlapX(p.x, p.halfW) && Math.abs(p.y - evY) < laneHeight * 0.4) {
             stagger += 14;
           }
         }
@@ -368,27 +404,33 @@ export function renderTimeline(
         // Events without coords go on the main timeline
         evY = timelineY;
         let tries = 0;
-        for (const p of placed) {
-          if (Math.abs(p.x - x) < 60 && Math.abs(p.y - timelineY) < 50) {
+        for (const p of placedLabels) {
+          if (labelsOverlapX(p.x, p.halfW) && Math.abs(p.y - timelineY) < 50) {
             tries++;
             evY = timelineY + (tries % 2 === 0 ? -1 : 1) * (30 + tries * 18);
           }
         }
       }
     } else {
-      // Normal single-lane layout
-      let tries = 0;
+      // Normal single-lane layout — find a Y slot with no label overlap.
+      // Re-scan all placed labels after each adjustment to avoid placing
+      // into a slot that an earlier (already-checked) label occupies.
       const direction = sorted.indexOf(ev) % 2 === 0 ? -1 : 1;
       let baseY = timelineY + direction * 30;
-      for (const p of placed) {
-        if (Math.abs(p.x - x) < 60) {
-          tries++;
-          baseY = timelineY + (tries % 2 === 0 ? -1 : 1) * (30 + tries * 22);
+      let settled = false;
+      for (let tries = 0; !settled && tries < 12; tries++) {
+        settled = true;
+        for (const p of placedLabels) {
+          if (labelsOverlapX(p.x, p.halfW) && Math.abs(p.y - baseY) < 28) {
+            settled = false;
+            baseY = timelineY + ((tries + 1) % 2 === 0 ? -1 : 1) * (30 + (tries + 1) * 22);
+            break; // restart scan from first placed label
+          }
         }
       }
       evY = baseY;
     }
-    placed.push({ x, y: evY });
+    placedLabels.push({ x, y: evY, halfW: titleHalfW });
     hitTargets.push({ event: ev, x, y: evY });
 
     const isHovered = hoveredId === ev.id;

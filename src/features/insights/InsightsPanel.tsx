@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Viewport, TimelineEvent } from '../../types';
 import { formatYear, scaleLabel } from '../../utils/format';
 
@@ -7,53 +7,91 @@ interface Props {
   visibleEvents: TimelineEvent[];
 }
 
+interface InsightSource {
+  url: string;
+  title: string;
+}
+
 export default function InsightsPanel({ viewport, visibleEvents }: Props) {
   const [insights, setInsights] = useState<string[]>([]);
+  const [sources, setSources] = useState<InsightSource[]>([]);
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const timerRef = useRef<number>(0);
+  const [active, setActive] = useState(false);
   const lastFetchRef = useRef('');
 
-  useEffect(() => {
-    // Only fetch when zoomed past cosmic scale
-    if (viewport.span > 1e9) {
-      setInsights(prev => (prev.length === 0 ? prev : []));
-      return;
-    }
+  // Hide at cosmic scale
+  if (viewport.span > 1e9) return null;
 
+  const fetchInsights = async () => {
     const key = `${Math.round(viewport.centerYear / (viewport.span * 0.1))}_${Math.round(viewport.span)}`;
-    if (key === lastFetchRef.current) return;
+    if (key === lastFetchRef.current && insights.length > 0) return;
 
-    clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(async () => {
-      lastFetchRef.current = key;
-      setLoading(true);
-      try {
-        const resp = await fetch('/api/insights', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            centerYear: viewport.centerYear,
-            span: viewport.span,
-            visibleEvents: visibleEvents.slice(0, 10).map(e => e.title),
-          }),
-        });
-        const data = await resp.json();
-        if (data.insights?.length) setInsights(data.insights);
-      } catch {
-        // Silently fail
-      } finally {
-        setLoading(false);
-      }
-    }, 2500);
+    lastFetchRef.current = key;
+    setLoading(true);
+    try {
+      const resp = await fetch('/api/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          centerYear: viewport.centerYear,
+          span: viewport.span,
+          visibleEvents: visibleEvents.slice(0, 10).map(e => e.title),
+        }),
+      });
+      const data = await resp.json();
+      if (data.insights?.length) setInsights(data.insights);
+      setSources(Array.isArray(data.sources) ? data.sources : []);
+    } catch {
+      // Silently fail
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => clearTimeout(timerRef.current);
-    // visibleEvents intentionally omitted: its identity changes every render and
-    // the request key already encodes when a refetch is meaningful.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewport.centerYear, viewport.span]);
+  const handleActivate = () => {
+    setActive(true);
+    setCollapsed(false);
+    fetchInsights();
+  };
 
-  if (viewport.span > 1e9 && insights.length === 0) return null;
+  const handleRefresh = () => {
+    lastFetchRef.current = '';
+    fetchInsights();
+  };
+
+  // Inactive state — just show a small button
+  if (!active) {
+    return (
+      <div style={{
+        position: 'absolute',
+        bottom: 20,
+        left: 20,
+        zIndex: 30,
+      }}>
+        <button
+          onClick={handleActivate}
+          style={{
+            background: 'rgba(13, 17, 23, 0.9)',
+            borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(20px)',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            cursor: 'pointer',
+            color: '#ffffffbb',
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>{'💡'}</span>
+          AI Insights
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -71,20 +109,24 @@ export default function InsightsPanel({ viewport, visibleEvents }: Props) {
     }}>
       {/* Header */}
       <div
-        onClick={() => setCollapsed(!collapsed)}
         style={{
           padding: collapsed ? '10px 12px' : '12px 16px',
           borderBottom: collapsed ? 'none' : '1px solid rgba(255,255,255,0.06)',
-          cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
         }}
       >
-        <span style={{ fontSize: 16 }}>💡</span>
+        <span
+          onClick={() => setCollapsed(!collapsed)}
+          style={{ fontSize: 16, cursor: 'pointer' }}
+        >{'💡'}</span>
         {!collapsed && (
           <>
-            <span style={{ color: '#ffffffbb', fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>
+            <span
+              onClick={() => setCollapsed(!collapsed)}
+              style={{ color: '#ffffffbb', fontSize: 12, fontWeight: 600, letterSpacing: 0.5, cursor: 'pointer' }}
+            >
               AI INSIGHTS
             </span>
             <span style={{
@@ -93,8 +135,34 @@ export default function InsightsPanel({ viewport, visibleEvents }: Props) {
               color: '#ffffff50',
               fontFamily: 'monospace',
             }}>
-              {scaleLabel(viewport.span)} · {formatYear(viewport.centerYear)}
+              {scaleLabel(viewport.span)} {'\u00b7'} {formatYear(viewport.centerYear)}
             </span>
+            <button
+              onClick={handleRefresh}
+              title="Refresh insights for current view"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 6,
+                padding: '3px 8px',
+                color: '#ffffff80',
+                fontSize: 10,
+                cursor: 'pointer',
+              }}
+            >
+              Refresh
+            </button>
+            <button
+              onClick={() => { setActive(false); setInsights([]); setSources([]); }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255,255,255,0.4)',
+                fontSize: 14,
+                cursor: 'pointer',
+                padding: '0 2px',
+              }}
+            >{'\u2715'}</button>
           </>
         )}
       </div>
@@ -118,10 +186,39 @@ export default function InsightsPanel({ viewport, visibleEvents }: Props) {
                 lineHeight: 1.5,
               }}
             >
-              <span style={{ color: '#ffd700', marginRight: 6 }}>✦</span>
+              <span style={{ color: '#ffd700', marginRight: 6 }}>{'\u2726'}</span>
               {fact}
             </div>
           ))}
+          {sources.length > 0 && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ color: '#ffffff50', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Sources
+              </div>
+              {sources.map((s, i) => (
+                <a
+                  key={i}
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'block',
+                    color: '#60a5fa',
+                    fontSize: 11,
+                    lineHeight: 1.4,
+                    padding: '2px 0',
+                    textDecoration: 'none',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                  title={s.url}
+                >
+                  {i + 1}. {s.title}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
