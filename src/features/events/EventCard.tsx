@@ -642,21 +642,26 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
           </div>
         )}
 
-        {/* Related Events — Wikidata graph (free, no AI) */}
-        {event.wiki && relatedEvents.length === 0 && !relatedLoading && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <button
-              onClick={loadRelatedEvents}
-              style={{
-                ...EVENT_ACTION_STYLE,
-                padding: '6px 12px',
-                background: 'rgba(255,255,255,0.04)',
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.08)',
-              }}
-            >
-              Discover related events
-            </button>
+        {/* Related Events — Wikidata graph (free, no AI).
+            Discovery button only shows before loading; the graph button stays
+            visible whether or not related events have been listed yet so users
+            can always reach the visual graph after seeing the textual list. */}
+        {event.wiki && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            {relatedEvents.length === 0 && !relatedLoading && (
+              <button
+                onClick={loadRelatedEvents}
+                style={{
+                  ...EVENT_ACTION_STYLE,
+                  padding: '6px 12px',
+                  background: 'rgba(255,255,255,0.04)',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                Discover related events
+              </button>
+            )}
             {onNavigate && (
               <button
                 onClick={() => setShowGraph(true)}

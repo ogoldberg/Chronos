@@ -72,18 +72,53 @@ async function sparql(query: string): Promise<any[]> {
 
 const qidCache = new Map<string, string | null>();
 
+/**
+ * Resolve a (possibly imperfect) title to a Wikidata QID.
+ *
+ * Two-step lookup so events whose stored title doesn't exactly match a
+ * Wikipedia article (e.g. "1828 Treaty of Montevideo" vs the actual
+ * "Preliminary Peace Convention (1828)") still find their entity:
+ *
+ *   1. SPARQL exact match on `schema:name` — fast, free, works for canonical titles.
+ *   2. Fall back to Wikipedia's search API to find the real article title,
+ *      then re-run the SPARQL lookup with that canonical title.
+ *
+ * The Wikipedia API also follows redirects automatically, so titles like
+ * "Battle of Focsani" (no diacritics) resolve to "Battle of Focșani".
+ */
 export async function resolveQID(wikipediaTitle: string): Promise<string | null> {
   if (qidCache.has(wikipediaTitle)) return qidCache.get(wikipediaTitle) ?? null;
 
-  const bindings = await sparql(`
-    SELECT ?item WHERE {
-      ?article schema:about ?item ;
-               schema:isPartOf <https://en.wikipedia.org/> ;
-               schema:name "${wikipediaTitle.replace(/"/g, '\\"')}"@en .
-    } LIMIT 1
-  `);
+  const lookup = async (title: string): Promise<string | null> => {
+    const bindings = await sparql(`
+      SELECT ?item WHERE {
+        ?article schema:about ?item ;
+                 schema:isPartOf <https://en.wikipedia.org/> ;
+                 schema:name "${title.replace(/"/g, '\\"')}"@en .
+      } LIMIT 1
+    `);
+    return bindings[0]?.item?.value?.replace('http://www.wikidata.org/entity/', '') ?? null;
+  };
 
-  const qid = bindings[0]?.item?.value?.replace('http://www.wikidata.org/entity/', '') ?? null;
+  let qid = await lookup(wikipediaTitle);
+
+  // Fallback: ask Wikipedia for the canonical article title and retry.
+  if (!qid) {
+    try {
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(wikipediaTitle)}&srlimit=1&format=json&origin=*`;
+      const resp = await fetch(searchUrl, { headers: { 'User-Agent': USER_AGENT } });
+      if (resp.ok) {
+        const data = await resp.json();
+        const canonicalTitle = data.query?.search?.[0]?.title;
+        if (canonicalTitle && canonicalTitle !== wikipediaTitle) {
+          qid = await lookup(canonicalTitle);
+        }
+      }
+    } catch {
+      // Best-effort fallback; leave qid as null on failure.
+    }
+  }
+
   qidCache.set(wikipediaTitle, qid);
   return qid;
 }

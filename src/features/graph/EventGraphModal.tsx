@@ -92,7 +92,17 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
       .then(data => {
         const related: RelatedEvent[] = data.related || [];
         if (related.length === 0) {
-          setError('No graph connections found for this event');
+          // Wikidata's knowledge graph is uneven — well-documented events
+          // like major battles have rich cause/effect/sub-event chains,
+          // while many treaties, minor incidents, and recent events
+          // simply don't have those properties filled in yet.
+          setError(
+            `No graph connections found in Wikidata for "${eventTitle}". ` +
+            'Wikidata coverage is uneven — major events like wars and battles ' +
+            'tend to have rich connection data, while many treaties, minor ' +
+            'incidents, and very recent events do not yet have cause/effect ' +
+            'or sub-event relations recorded.',
+          );
           setLoading(false);
           return;
         }
@@ -645,9 +655,22 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
         {error && (
           <div style={{
             position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#ff6b6b', fontSize: 14,
+            padding: 40,
           }}>
-            {error}
+            <div style={{
+              maxWidth: 520,
+              padding: '24px 28px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 12,
+              color: '#ffffff80',
+              fontSize: 14,
+              lineHeight: 1.6,
+              textAlign: 'center',
+              fontFamily: '"Fraunces", Georgia, serif',
+            }}>
+              {error}
+            </div>
           </div>
         )}
         <canvas
