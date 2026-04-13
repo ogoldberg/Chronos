@@ -74,22 +74,38 @@ async function discoverFromWikidata(
   if (startYear < -10000) return [];
 
   // Build SPARQL query for events in the year range.
-  // Filter to actual event types (not years, centuries, or random entities).
-  // Wikidata type IDs:
-  //   Q1190554 = occurrence, Q178561 = battle, Q198 = war,
-  //   Q13418847 = historical event, Q831663 = military campaign,
-  //   Q8261 = novel (cultural), Q11514315 = historical period,
-  //   Q3839081 = disaster, Q124757 = riot, Q82794 = geographic discovery,
-  //   Q35127 = revolution, Q93288 = treaty, Q476300 = epidemic,
-  //   Q7278 = political revolution, Q2223653 = protest
+  // Filter to actual event types (not years, centuries, or list articles).
+  // Broad coverage across military, political, cultural, scientific, and disaster events.
   const query = `
     SELECT DISTINCT ?event ?eventLabel ?date ?coord ?articleTitle WHERE {
       ?event wdt:P585 ?date .
       ?event wdt:P31 ?type .
       VALUES ?type {
-        wd:Q1190554 wd:Q178561 wd:Q198 wd:Q13418847 wd:Q831663
-        wd:Q3839081 wd:Q124757 wd:Q82794 wd:Q35127 wd:Q93288
-        wd:Q476300 wd:Q7278 wd:Q2223653
+        wd:Q1190554   # occurrence
+        wd:Q13418847  # historical event
+        wd:Q178561    # battle
+        wd:Q198       # war
+        wd:Q831663    # military campaign
+        wd:Q93288     # treaty
+        wd:Q131569    # legislation / act of parliament
+        wd:Q35127     # revolution
+        wd:Q7278      # political revolution
+        wd:Q124757    # riot
+        wd:Q2223653   # protest
+        wd:Q476300    # epidemic
+        wd:Q3839081   # disaster
+        wd:Q15275719  # recurring event edition
+        wd:Q3505845   # international incident
+        wd:Q1006311   # coup d'etat (subclass)
+        wd:Q17317604  # expedition
+        wd:Q1348589   # political crisis
+        wd:Q7283      # terrorism
+        wd:Q175331    # mutiny
+        wd:Q12184     # pandemic
+        wd:Q8065      # natural disaster
+        wd:Q5765950   # massacre
+        wd:Q6974      # assassination
+        wd:Q8261      # novel
       }
       FILTER(YEAR(?date) >= ${Math.floor(startYear)} && YEAR(?date) <= ${Math.ceil(endYear)})
       ?article schema:about ?event ;
@@ -98,7 +114,7 @@ async function discoverFromWikidata(
       OPTIONAL { ?event wdt:P625 ?coord }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
     }
-    LIMIT ${Math.min(count * 4, 80)}
+    LIMIT ${Math.min(count * 5, 100)}
   `;
 
   try {
