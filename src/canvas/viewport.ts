@@ -14,7 +14,10 @@ export function isEventVisible(ev: TimelineEvent, vp: Viewport): boolean {
   return ev.year >= left && ev.year <= right;
 }
 
-const MIN_SPAN = 0.5;
+// ~1 month. Lower than the old 0.5yr floor so users can actually zoom
+// into a single month (e.g., "Apr 2026") and trigger per-month discovery
+// rather than hitting the clamp and seeing a no-op.
+const MIN_SPAN = 1 / 12;
 // Max span = rough age of the universe. Zooming out further would only
 // show empty space before the Big Bang, so we cap it here.
 const MAX_SPAN = 1.4e10;
@@ -45,12 +48,18 @@ export function nowYear(): number {
 }
 
 /**
- * Maximum allowed `centerYear` given a viewport span. The right edge
- * (center + span/2) must not exceed `nowYear()`, so
- * center ≤ nowYear() - span/2.
+ * Maximum allowed `centerYear` given a viewport span. Originally the
+ * right edge was hard-pinned to `nowYear()`, which made cosmic-scale
+ * views feel broken: pressing → or dragging right did nothing because
+ * the viewport was already flush with the present. We now allow the
+ * right edge to advance half a span past now, so there's always some
+ * visible "future" headroom to pan into. The renderer draws a
+ * labeled future zone past the TODAY marker so the extra space is
+ * visually legible rather than empty.
  */
+const FUTURE_HEADROOM_FRAC = 0.5;
 function maxCenterForSpan(span: number): number {
-  return NOW_YEAR_AT_LOAD - span / 2;
+  return NOW_YEAR_AT_LOAD + span * FUTURE_HEADROOM_FRAC;
 }
 
 export function yearToPixel(year: number, vp: Viewport, width: number): number {
