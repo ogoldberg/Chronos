@@ -58,7 +58,7 @@ async function main() {
   // Streaming chat endpoint
   app.post('/api/chat/stream', async (req, res) => {
     try {
-      await handleStreamRequest(req.body || {}, res);
+      await handleStreamRequest(req.body || {}, res, req.headers as Record<string, string | string[] | undefined>);
     } catch (err: any) {
       console.error('[API] stream error:', err.message);
       if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });

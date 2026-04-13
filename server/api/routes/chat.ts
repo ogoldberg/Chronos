@@ -35,8 +35,8 @@ export function registerChatRoutes(handleRoute: RouteHandler) {
 }
 
 /** Handle streaming chat via Server-Sent Events */
-export async function handleStreamRequest(body: any, res: any): Promise<void> {
-  if (!checkRateLimit('chat-stream', getClientIP(reqHeaders || {}))) {
+export async function handleStreamRequest(body: any, res: any, reqHeaders: Record<string, string | string[] | undefined> = {}): Promise<void> {
+  if (!checkRateLimit('chat-stream', getClientIP(reqHeaders))) {
     res.writeHead(429, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
     return;
