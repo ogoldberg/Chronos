@@ -81,7 +81,7 @@ const isDbReady = () => dbReady;
 registerEventsRoutes(handleRoute, isDbReady);
 registerDiscoverRoutes(handleRoute, isDbReady);
 registerChatRoutes(handleRoute);
-registerInsightsRoutes(handleRoute);
+registerInsightsRoutes(handleRoute, isDbReady);
 registerParallelsRoutes(handleRoute);
 registerMythsRoutes(handleRoute);
 registerQuizRoutes(handleRoute);
@@ -195,7 +195,7 @@ export function apiPlugin(): Plugin {
           // Streaming chat endpoint
           if (req.method === 'POST' && url === '/api/chat/stream') {
             const body = await parseBody(req);
-            await handleStreamRequest(body, res);
+            await handleStreamRequest(body, res, req.headers as Record<string, string | string[] | undefined>);
             return;
           }
 
