@@ -73,10 +73,13 @@ export function invalidateCacheRange(startYear: number, endYear: number) {
 }
 
 function getTier(span: number) {
-  for (const tier of ZOOM_TIERS) {
-    if (span <= tier.maxSpan) return tier;
+  // Find the most specific (finest) tier whose maxSpan covers this span.
+  // Tiers are ordered broadest-first, so iterate backwards to find the
+  // finest match.
+  for (let i = ZOOM_TIERS.length - 1; i >= 0; i--) {
+    if (span <= ZOOM_TIERS[i]!.maxSpan) return ZOOM_TIERS[i]!;
   }
-  return ZOOM_TIERS[0];
+  return ZOOM_TIERS[0]!;
 }
 
 function getActiveTiers(span: number) {
@@ -189,10 +192,12 @@ export function discoverEvents(
         activeRequests++;
         fetchCell(tier, cellStart, cellEnd, existingTitles)
           .then(events => {
+            console.log(`[Discovery] ${key}: ${events.length} events from ${cellStart}-${cellEnd}`);
             cellStates.set(key, { status: 'loaded', events });
             if (events.length > 0) onNewEvents(events);
           })
-          .catch(() => {
+          .catch((err) => {
+            console.error(`[Discovery] ${key} failed:`, err);
             cellStates.set(key, { status: 'error', events: [] });
           })
           .finally(() => {
