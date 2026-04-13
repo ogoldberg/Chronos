@@ -98,6 +98,17 @@ CREATE TABLE IF NOT EXISTS event_connections (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Insights cache: AI-generated era insights bucketed by (center, span).
+-- Keyed the same way the client buckets (round(centerYear/(span*0.1))),
+-- so repeat views of the same region hit DB instead of regenerating.
+CREATE TABLE IF NOT EXISTS insights_cache (
+  bucket_key      TEXT PRIMARY KEY,
+  insights        JSONB NOT NULL,
+  sources         JSONB DEFAULT '[]',
+  fetched_at      TIMESTAMPTZ DEFAULT NOW(),
+  expires_at      TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days')
+);
+
 -- Cache regions: track what AI has discovered
 CREATE TABLE IF NOT EXISTS cache_regions (
   id              SERIAL PRIMARY KEY,
@@ -518,6 +529,39 @@ export async function getNearbyEvents(
     [lat, lng, radiusDeg, limit],
   );
   return result.rows;
+}
+
+// ─── Insights Cache ───
+
+export async function getCachedInsights(bucketKey: string): Promise<{ insights: string[]; sources: Array<{ url: string; title: string }> } | null> {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT insights, sources FROM insights_cache WHERE bucket_key = $1 AND expires_at > NOW()`,
+    [bucketKey],
+  );
+  if (result.rows.length === 0) return null;
+  return {
+    insights: result.rows[0].insights || [],
+    sources: result.rows[0].sources || [],
+  };
+}
+
+export async function setCachedInsights(
+  bucketKey: string,
+  insights: string[],
+  sources: Array<{ url: string; title: string }>,
+): Promise<void> {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO insights_cache (bucket_key, insights, sources, fetched_at, expires_at)
+     VALUES ($1, $2::jsonb, $3::jsonb, NOW(), NOW() + INTERVAL '30 days')
+     ON CONFLICT (bucket_key) DO UPDATE SET
+       insights = EXCLUDED.insights,
+       sources = EXCLUDED.sources,
+       fetched_at = NOW(),
+       expires_at = NOW() + INTERVAL '30 days'`,
+    [bucketKey, JSON.stringify(insights), JSON.stringify(sources)],
+  );
 }
 
 // ─── Cache Regions ───

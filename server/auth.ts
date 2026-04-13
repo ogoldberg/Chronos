@@ -6,6 +6,7 @@
  */
 
 import { betterAuth } from 'better-auth';
+import pg from 'pg';
 
 let _auth: ReturnType<typeof betterAuth> | null = null;
 
@@ -16,11 +17,11 @@ export function initAuth() {
     return null;
   }
 
+  // Better Auth v1.5+ takes a pg Pool instance directly.
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
   _auth = betterAuth({
-    database: {
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-    },
+    database: pool,
 
     emailAndPassword: {
       enabled: true,
