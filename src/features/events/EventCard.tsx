@@ -1,4 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import type { TimelineEvent, WikiData, Citation } from '../../types';
 import { formatYear } from '../../utils/format';
 import { fetchWikiSummary } from '../../services/wikipediaApi';
@@ -782,8 +783,8 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
         </div>
       </div>
 
-      {/* Wikidata Graph Modal */}
-      {showGraph && event.wiki && onNavigate && (
+      {/* Wikidata Graph Modal — portalled to body for full-screen overlay */}
+      {showGraph && event.wiki && onNavigate && createPortal(
         <Suspense fallback={null}>
           <EventGraphModal
             eventTitle={event.title}
@@ -792,7 +793,8 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
             onNavigate={onNavigate}
             onClose={() => setShowGraph(false)}
           />
-        </Suspense>
+        </Suspense>,
+        document.body,
       )}
     </div>
   );

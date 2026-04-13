@@ -115,11 +115,13 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
         // Group events by shared parent for interconnected layout
         const parentGroups = new Map<string, RelatedEvent[]>();
         const directRelations: RelatedEvent[] = [];
+        const parentNames = new Set<string>();
 
         for (const rel of related) {
           const parentMatch = rel.relation.match(/^Part of: (.+)$/);
           if (parentMatch) {
             const parent = parentMatch[1]!;
+            parentNames.add(parent);
             const group = parentGroups.get(parent) || [];
             group.push(rel);
             parentGroups.set(parent, group);
@@ -181,8 +183,9 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
         }
 
         // Add direct relations (caused by, led to, etc.) as direct connections to focal
+        // Skip events whose title matches a parent hub (already rendered as hub node)
         for (const rel of directRelations) {
-          if (seen.has(rel.title)) continue;
+          if (seen.has(rel.title) || parentNames.has(rel.title)) continue;
           seen.add(rel.title);
           const angle = (nodeIdx / (directRelations.length || 1)) * Math.PI * 2;
           const dist = 160 + Math.random() * 80;
@@ -335,8 +338,9 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
 
         const isHighlighted = hoveredNode === e.source || hoveredNode === e.target ||
                              selectedNode === e.source || selectedNode === e.target;
+        const dimmed = (hoveredNode || selectedNode) && !isHighlighted;
         const color = getRelationColor(e.relation);
-        const alpha = isHighlighted ? 0.8 : hoveredNode || selectedNode ? 0.12 : 0.35;
+        const alpha = isHighlighted ? 0.8 : dimmed ? 0.08 : 0.35;
 
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
@@ -346,52 +350,74 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
         ctx.stroke();
 
         // Arrow head
-        if (isHighlighted || (!hoveredNode && !selectedNode)) {
+        if (!dimmed) {
           const angle = Math.atan2(b.y - a.y, b.x - a.x);
           const arrowDist = b.radius + 4;
-          const ax = b.x - Math.cos(angle) * arrowDist;
-          const ay = b.y - Math.sin(angle) * arrowDist;
+          const tipX = b.x - Math.cos(angle) * arrowDist;
+          const tipY = b.y - Math.sin(angle) * arrowDist;
           const arrowSize = (isHighlighted ? 8 : 5) / cam.zoom;
           ctx.beginPath();
-          ctx.moveTo(ax, ay);
-          ctx.lineTo(ax - Math.cos(angle - 0.4) * arrowSize, ay - Math.sin(angle - 0.4) * arrowSize);
-          ctx.lineTo(ax - Math.cos(angle + 0.4) * arrowSize, ay - Math.sin(angle + 0.4) * arrowSize);
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(tipX - Math.cos(angle - 0.4) * arrowSize, tipY - Math.sin(angle - 0.4) * arrowSize);
+          ctx.lineTo(tipX - Math.cos(angle + 0.4) * arrowSize, tipY - Math.sin(angle + 0.4) * arrowSize);
           ctx.closePath();
           ctx.fillStyle = color + Math.round(alpha * 255).toString(16).padStart(2, '0');
           ctx.fill();
         }
 
-        // Edge label with relation type + description
-        if (isHighlighted) {
-          const mx = (a.x + b.x) / 2;
-          const my = (a.y + b.y) / 2;
+        // Edge label — show on highlighted edges and always on non-dimmed edges
+        if (!dimmed) {
+          // Position label at 40% from source toward target (avoids node overlap)
+          const t = isHighlighted ? 0.5 : 0.4;
+          const mx = a.x + (b.x - a.x) * t;
+          const my = a.y + (b.y - a.y) * t;
 
-          // Background pill for readability
-          ctx.font = `600 ${10 / cam.zoom}px system-ui, sans-serif`;
-          const labelText = e.relation;
+          // Use short label for default view, full label on hover
+          let labelText = e.relation;
+          if (!isHighlighted && labelText.startsWith('Part of:')) labelText = 'Part of';
+
+          const fontSize = isHighlighted ? 11 : 9;
+          ctx.font = `600 ${fontSize / cam.zoom}px system-ui, sans-serif`;
           const metrics = ctx.measureText(labelText);
           const pillW = metrics.width + 12 / cam.zoom;
-          const pillH = 18 / cam.zoom;
-          ctx.fillStyle = 'rgba(10,14,22,0.9)';
+          const pillH = 16 / cam.zoom;
+          const labelAlpha = isHighlighted ? 0.95 : 0.6;
+
+          // Rotate label to follow edge angle
+          const edgeAngle = Math.atan2(b.y - a.y, b.x - a.x);
+          // Flip if label would be upside-down
+          const flipAngle = (edgeAngle > Math.PI / 2 || edgeAngle < -Math.PI / 2)
+            ? edgeAngle + Math.PI : edgeAngle;
+
+          ctx.save();
+          ctx.translate(mx, my);
+          ctx.rotate(flipAngle);
+
+          // Background pill
+          ctx.fillStyle = `rgba(10,14,22,${labelAlpha})`;
           ctx.beginPath();
-          ctx.roundRect(mx - pillW / 2, my - pillH - 4 / cam.zoom, pillW, pillH, 4 / cam.zoom);
+          ctx.roundRect(-pillW / 2, -pillH / 2 - 2 / cam.zoom, pillW, pillH, 4 / cam.zoom);
           ctx.fill();
 
-          ctx.fillStyle = color;
+          ctx.fillStyle = color + Math.round(labelAlpha * 255).toString(16).padStart(2, '0');
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(labelText, mx, my - pillH / 2 - 4 / cam.zoom);
+          ctx.fillText(labelText, 0, -2 / cam.zoom);
+          ctx.restore();
 
-          // Show target node description below the edge midpoint
-          const targetNode = b.id === 'focal' ? a : b;
-          if (targetNode.description) {
-            ctx.font = `italic ${9 / cam.zoom}px system-ui, sans-serif`;
-            ctx.fillStyle = 'rgba(255,255,255,0.5)';
-            ctx.textBaseline = 'top';
-            const desc = targetNode.description.length > 50
-              ? targetNode.description.slice(0, 48) + '...'
-              : targetNode.description;
-            ctx.fillText(desc, mx, my + 4 / cam.zoom);
+          // Show target node description below the edge midpoint on hover
+          if (isHighlighted) {
+            const targetNode = b.id === 'focal' ? a : b;
+            if (targetNode.description) {
+              ctx.font = `italic ${9 / cam.zoom}px system-ui, sans-serif`;
+              ctx.fillStyle = 'rgba(255,255,255,0.5)';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              const desc = targetNode.description.length > 60
+                ? targetNode.description.slice(0, 58) + '...'
+                : targetNode.description;
+              ctx.fillText(desc, mx, my + pillH / 2 + 6 / cam.zoom);
+            }
           }
         }
       }
