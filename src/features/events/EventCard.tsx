@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import type { TimelineEvent, WikiData, Citation } from '../../types';
 import { formatYear } from '../../utils/format';
 import { fetchWikiSummary } from '../../services/wikipediaApi';
@@ -8,10 +8,13 @@ import { factCheckEvent, type FactCheckResult } from '../../services/factCheck';
 import { verifyCitations } from '../../services/citationVerifier';
 import EventVoting from './EventVoting';
 
+const EventGraphModal = lazy(() => import('../graph/EventGraphModal'));
+
 interface Props {
   event: TimelineEvent;
   onClose: () => void;
   onAskGuide: (question: string) => void;
+  onNavigate?: (year: number, span: number) => void;
 }
 
 /** Shared shape for the trio of action buttons at the bottom of the card. */
@@ -39,7 +42,7 @@ interface RelatedEvent {
   wiki?: string;
 }
 
-export default function EventCard({ event, onClose, onAskGuide }: Props) {
+export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Props) {
   const [wiki, setWiki] = useState<WikiData | null>(null);
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<PrimarySource[]>([]);
@@ -47,6 +50,7 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
   const [verifiedCitations, setVerifiedCitations] = useState<Citation[]>([]);
   const [relatedEvents, setRelatedEvents] = useState<RelatedEvent[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
+  const [showGraph, setShowGraph] = useState(false);
   // Wikipedia section expanded state. When collapsed we clamp the extract
   // at ~120px with a fade mask; when expanded the full article text flows
   // inline and the card itself scrolls to accommodate it.
@@ -639,19 +643,35 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
 
         {/* Related Events — Wikidata graph (free, no AI) */}
         {event.wiki && relatedEvents.length === 0 && !relatedLoading && (
-          <button
-            onClick={loadRelatedEvents}
-            style={{
-              ...EVENT_ACTION_STYLE,
-              marginBottom: 12,
-              padding: '6px 12px',
-              background: 'rgba(255,255,255,0.04)',
-              borderRadius: 8,
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}
-          >
-            Discover related events
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <button
+              onClick={loadRelatedEvents}
+              style={{
+                ...EVENT_ACTION_STYLE,
+                padding: '6px 12px',
+                background: 'rgba(255,255,255,0.04)',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              Discover related events
+            </button>
+            {onNavigate && (
+              <button
+                onClick={() => setShowGraph(true)}
+                style={{
+                  ...EVENT_ACTION_STYLE,
+                  padding: '6px 12px',
+                  background: 'rgba(96,165,250,0.08)',
+                  borderRadius: 8,
+                  border: '1px solid rgba(96,165,250,0.2)',
+                  color: '#60a5fa',
+                }}
+              >
+                View connection graph
+              </button>
+            )}
+          </div>
         )}
         {relatedLoading && (
           <div style={{ fontSize: 12, color: '#ffffff50', marginBottom: 12 }}>
@@ -761,6 +781,19 @@ export default function EventCard({ event, onClose, onAskGuide }: Props) {
           </button>
         </div>
       </div>
+
+      {/* Wikidata Graph Modal */}
+      {showGraph && event.wiki && onNavigate && (
+        <Suspense fallback={null}>
+          <EventGraphModal
+            eventTitle={event.title}
+            eventYear={event.year}
+            eventWiki={event.wiki}
+            onNavigate={onNavigate}
+            onClose={() => setShowGraph(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
