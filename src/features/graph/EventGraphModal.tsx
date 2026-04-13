@@ -52,12 +52,14 @@ const RELATION_COLORS: Record<string, string> = {
   'Led to':       '#22c55e',
   'Followed by':  '#22c55e',
   'Preceded by':  '#60a5fa',
-  'Part of this': '#a78bfa',
-  'Related event':'#60a5fa',
+  'Sub-event':    '#a78bfa',
+  'Part of':      '#c084fc',
   self:           '#ffffff',
 };
 
 function getRelationColor(relation: string): string {
+  // Check for "Part of: X" pattern
+  if (relation.startsWith('Part of')) return RELATION_COLORS['Part of']!;
   return RELATION_COLORS[relation] || '#60a5fa';
 }
 
@@ -95,7 +97,7 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
           return;
         }
 
-        // Build nodes: focal event at center + related events in a ring
+        // Build nodes: focal event at center, parent groups, related events
         const nodes: GNode[] = [];
         const edges: GEdge[] = [];
 
@@ -110,16 +112,84 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
           radius: 22,
         });
 
-        // Related nodes in a ring
-        const seen = new Set<string>();
-        related.forEach((rel, i) => {
-          if (seen.has(rel.title)) return;
-          seen.add(rel.title);
+        // Group events by shared parent for interconnected layout
+        const parentGroups = new Map<string, RelatedEvent[]>();
+        const directRelations: RelatedEvent[] = [];
 
-          const angle = (i / related.length) * Math.PI * 2 - Math.PI / 2;
-          const dist = 160 + Math.random() * 80;
+        for (const rel of related) {
+          const parentMatch = rel.relation.match(/^Part of: (.+)$/);
+          if (parentMatch) {
+            const parent = parentMatch[1]!;
+            const group = parentGroups.get(parent) || [];
+            group.push(rel);
+            parentGroups.set(parent, group);
+          } else {
+            directRelations.push(rel);
+          }
+        }
+
+        const seen = new Set<string>();
+        let nodeIdx = 0;
+
+        // Add parent group nodes — parent becomes a hub, siblings orbit it
+        let groupIdx = 0;
+        for (const [parentName, siblings] of parentGroups) {
+          const groupAngle = (groupIdx / (parentGroups.size || 1)) * Math.PI * 2 - Math.PI / 2;
+          const parentDist = 180;
+
+          // Parent hub node
+          const parentId = `parent-${groupIdx}`;
           nodes.push({
-            id: `rel-${i}`,
+            id: parentId,
+            title: parentName,
+            relation: 'Part of',
+            x: Math.cos(groupAngle) * parentDist,
+            y: Math.sin(groupAngle) * parentDist,
+            vx: 0, vy: 0,
+            radius: 16,
+          });
+
+          // Edge from focal to parent
+          edges.push({ source: 'focal', target: parentId, relation: 'Part of' });
+
+          // Sibling nodes orbit the parent
+          siblings.forEach((sib, si) => {
+            if (seen.has(sib.title)) return;
+            seen.add(sib.title);
+            const sibAngle = groupAngle + ((si - siblings.length / 2) * 0.4);
+            const sibDist = parentDist + 100 + Math.random() * 40;
+            const id = `rel-${nodeIdx++}`;
+
+            nodes.push({
+              id,
+              title: sib.title,
+              year: sib.year,
+              relation: sib.relation,
+              description: sib.description,
+              wiki: sib.wiki,
+              x: Math.cos(sibAngle) * sibDist,
+              y: Math.sin(sibAngle) * sibDist,
+              vx: 0, vy: 0,
+              radius: 10,
+            });
+
+            // Edge from parent to sibling (not focal to sibling)
+            edges.push({ source: parentId, target: id, relation: sib.relation });
+          });
+
+          groupIdx++;
+        }
+
+        // Add direct relations (caused by, led to, etc.) as direct connections to focal
+        for (const rel of directRelations) {
+          if (seen.has(rel.title)) continue;
+          seen.add(rel.title);
+          const angle = (nodeIdx / (directRelations.length || 1)) * Math.PI * 2;
+          const dist = 160 + Math.random() * 80;
+          const id = `rel-${nodeIdx++}`;
+
+          nodes.push({
+            id,
             title: rel.title,
             year: rel.year,
             relation: rel.relation,
@@ -131,12 +201,8 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
             radius: 12,
           });
 
-          edges.push({
-            source: 'focal',
-            target: `rel-${i}`,
-            relation: rel.relation,
-          });
-        });
+          edges.push({ source: 'focal', target: id, relation: rel.relation });
+        }
 
         nodesRef.current = nodes;
         edgesRef.current = edges;

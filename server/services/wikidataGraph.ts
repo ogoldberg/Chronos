@@ -310,29 +310,49 @@ export async function enrichEventsWithGraph(
  * Wikidata graph. Returns events connected by cause/effect, part-of,
  * chronological, or shared participant relationships.
  */
+export interface RelatedEventResult {
+  title: string;
+  year?: number;
+  relation: string;
+  description?: string;
+  wiki?: string;
+  qid?: string;
+  sharedParent?: string; // e.g. "Seventh Russo-Turkish War"
+}
+
 export async function discoverRelatedEvents(
   wikipediaTitle: string,
-): Promise<Array<{ title: string; year?: number; relation: string; description?: string; wiki?: string }>> {
+): Promise<RelatedEventResult[]> {
   const qid = await resolveQID(wikipediaTitle);
   if (!qid) return [];
 
   const bindings = await sparql(`
-    SELECT DISTINCT ?relation ?related ?relatedLabel ?relatedDate ?relatedDescription ?articleTitle WHERE {
+    SELECT DISTINCT ?relation ?related ?relatedLabel ?relatedDate ?relatedDescription ?articleTitle ?parentLabel WHERE {
       {
-        wd:${qid} wdt:P828 ?related . BIND("Caused by" AS ?relation)
+        wd:${qid} wdt:P828 ?related .
+        BIND("Caused by" AS ?relation) BIND("" AS ?parentLabel)
       } UNION {
-        wd:${qid} wdt:P1542 ?related . BIND("Led to" AS ?relation)
+        wd:${qid} wdt:P1542 ?related .
+        BIND("Led to" AS ?relation) BIND("" AS ?parentLabel)
       } UNION {
-        ?related wdt:P361 wd:${qid} . BIND("Part of this" AS ?relation)
+        ?related wdt:P361 wd:${qid} .
+        BIND("Sub-event" AS ?relation) BIND("" AS ?parentLabel)
       } UNION {
+        wd:${qid} wdt:P361 ?parent .
         wd:${qid} wdt:P361 ?parent .
         ?related wdt:P361 ?parent .
         FILTER(?related != wd:${qid})
-        BIND("Related event" AS ?relation)
+        ?parent rdfs:label ?parentLabel . FILTER(LANG(?parentLabel) = "en")
+        BIND("sibling" AS ?relation)
       } UNION {
-        wd:${qid} wdt:P155 ?related . BIND("Preceded by" AS ?relation)
+        wd:${qid} wdt:P155 ?related .
+        BIND("Preceded by" AS ?relation) BIND("" AS ?parentLabel)
       } UNION {
-        wd:${qid} wdt:P156 ?related . BIND("Followed by" AS ?relation)
+        wd:${qid} wdt:P156 ?related .
+        BIND("Followed by" AS ?relation) BIND("" AS ?parentLabel)
+      } UNION {
+        wd:${qid} wdt:P361 ?related .
+        BIND("Part of" AS ?relation) BIND("" AS ?parentLabel)
       }
       OPTIONAL { ?related wdt:P585 ?relatedDate }
       OPTIONAL {
@@ -343,19 +363,35 @@ export async function discoverRelatedEvents(
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
       OPTIONAL { ?related schema:description ?relatedDescription . FILTER(LANG(?relatedDescription) = "en") }
     }
-    LIMIT 30
+    LIMIT 40
   `);
 
+  const seen = new Set<string>();
   return bindings
-    .filter(b => !b.relatedLabel?.value?.startsWith('Q'))
+    .filter(b => {
+      const label = b.relatedLabel?.value;
+      if (!label || label.startsWith('Q')) return false;
+      if (seen.has(label)) return false;
+      seen.add(label);
+      return true;
+    })
     .map(b => {
       const dateStr = b.relatedDate?.value;
+      const rawRelation = b.relation?.value ?? '';
+      const parentLabel = b.parentLabel?.value || '';
+      // Build a specific relation label
+      const relation = rawRelation === 'sibling' && parentLabel
+        ? `Part of: ${parentLabel}`
+        : rawRelation;
+
       return {
         title: b.relatedLabel?.value ?? '',
         year: dateStr ? new Date(dateStr).getFullYear() : undefined,
-        relation: b.relation?.value ?? '',
+        relation,
         description: b.relatedDescription?.value,
         wiki: b.articleTitle?.value,
+        qid: b.related?.value?.replace('http://www.wikidata.org/entity/', ''),
+        sharedParent: parentLabel || undefined,
       };
     });
 }
