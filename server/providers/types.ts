@@ -10,10 +10,23 @@ export interface AIMessage {
   content: string;
 }
 
+/**
+ * A single web source cited by the model. Populated by providers whose
+ * web_search tool returns URL + title per citation (currently Anthropic).
+ * Routes that return structured JSON (insights, discover, etc.) surface
+ * this list separately instead of appending a markdown footer to `text`.
+ */
+export interface AISource {
+  url: string;
+  title: string;
+}
+
 export interface AIResponse {
   text: string;
   /** If the provider did tool calls (e.g. web search), raw results */
   toolResults?: string[];
+  /** Deduped list of web sources cited during this response, in order of first appearance. */
+  sources?: AISource[];
 }
 
 export interface AIProviderConfig {
