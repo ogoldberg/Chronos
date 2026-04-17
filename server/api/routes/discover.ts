@@ -41,6 +41,27 @@ function pruneMemoryCache() {
   for (const [key] of entries.slice(0, entries.length - MAX_CACHE_SIZE)) memoryCache.delete(key);
 }
 
+/**
+ * Stable id from hash(title+year). Re-running discovery for the same
+ * region returns events in slightly different order from Wikidata, so a
+ * positional id like `d-${tierId}-${i}` would silently overwrite rows
+ * with new contents under the same primary key. The hash gives one row
+ * per real event — re-runs upsert in place.
+ *
+ * FNV-1a is plenty for a deduplication key; collision resistance isn't
+ * load-bearing here. Same algorithm as events.ts:91 to keep both ingest
+ * paths producing comparable identifiers.
+ */
+function stableId(source: string, title: string, year: number): string {
+  const str = `${title.trim().toLowerCase()}::${Math.round(year * 1000) / 1000}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `${source}-${(h >>> 0).toString(36)}`;
+}
+
 function getCategory(startYear: number): string {
   const absStart = Math.abs(startYear);
   if (absStart > 1e9) return 'cosmic';
@@ -63,6 +84,161 @@ function getCategoryColor(category: string): string {
 
 // ── Wikidata SPARQL discovery ────────────────────────────────────────
 
+/**
+ * Thematic category definitions for event discovery.
+ *
+ * Each theme targets a specific set of Wikidata P31 instance-of types.
+ * Running these as parallel queries with per-theme quotas prevents any
+ * one theme (historically: military) from swamping the timeline.
+ *
+ * The quota is a *target share* of the requested count — we try to pull
+ * at least that many events from each theme, but fall back to whatever
+ * the theme can supply if Wikidata has less for that period.
+ *
+ * `dateProperty` is the Wikidata property used to date the instance.
+ * Most events use P585 (point in time), but creative works use P577
+ * (publication date) and some inventions use P571 (inception).
+ */
+interface ThemeSpec {
+  id: string;
+  label: string;
+  types: string[];
+  dateProperty: 'P585' | 'P577' | 'P571';
+  // Weight determines per-theme quota: quotas are normalized so weights
+  // sum to the requested count.
+  weight: number;
+}
+
+const THEMES: ThemeSpec[] = [
+  {
+    id: 'science',
+    label: 'Science & discovery',
+    types: [
+      'Q2334719',    // scientific discovery
+      'Q2389789',    // discovery (broader)
+      'Q12772819',   // scientific theory introduction
+      'Q40218',      // astronomical discovery
+    ],
+    dateProperty: 'P585',
+    weight: 2,
+  },
+  {
+    id: 'invention',
+    label: 'Invention & technology',
+    types: [
+      'Q11019',      // machine
+      'Q12522',      // invention (subclass target)
+      'Q11460',      // clothing (technology of)
+      'Q44432',      // technology
+    ],
+    dateProperty: 'P571',
+    weight: 1.5,
+  },
+  {
+    id: 'literature',
+    label: 'Literature',
+    types: [
+      'Q8261',       // novel
+      'Q571',        // book
+      'Q34379',      // poem
+      'Q1279564',    // play (theatrical work)
+    ],
+    dateProperty: 'P577',
+    weight: 2,
+  },
+  {
+    id: 'art',
+    label: 'Art & music',
+    types: [
+      'Q3305213',    // painting
+      'Q482994',     // album
+      'Q1344',       // opera
+      'Q11424',      // film
+      'Q2031291',    // symphony
+    ],
+    dateProperty: 'P577',
+    weight: 2,
+  },
+  {
+    id: 'space',
+    label: 'Space exploration',
+    types: [
+      'Q2133344',    // space mission
+      'Q40218',      // astronomical discovery
+      'Q26540',      // artificial satellite
+    ],
+    dateProperty: 'P585',
+    weight: 1,
+  },
+  {
+    id: 'politics',
+    label: 'Politics & society',
+    types: [
+      'Q93288',      // treaty
+      'Q131569',     // legislation
+      'Q40231',      // election
+      'Q3881893',    // political speech
+      'Q1128324',    // constitution
+    ],
+    dateProperty: 'P585',
+    weight: 2,
+  },
+  {
+    id: 'disaster',
+    label: 'Disasters & epidemics',
+    types: [
+      'Q3839081',    // disaster
+      'Q476300',     // epidemic
+      'Q12184',      // pandemic
+      'Q8065',       // natural disaster
+      'Q2252077',    // earthquake
+    ],
+    dateProperty: 'P585',
+    weight: 1,
+  },
+  {
+    id: 'sport_culture',
+    label: 'Sport & culture',
+    types: [
+      'Q5389',       // Olympic Games
+      'Q15275719',   // recurring event edition (championships, festivals)
+      'Q17317604',   // expedition
+      'Q132241',     // festival
+    ],
+    dateProperty: 'P585',
+    weight: 1.5,
+  },
+  {
+    // Revolutions are split out from warfare because they're as much
+    // social/political upheavals as military events — well worth surfacing
+    // even in a timeline de-emphasizing pure military history.
+    id: 'revolution',
+    label: 'Revolution & upheaval',
+    types: [
+      'Q35127',      // revolution
+      'Q7278',       // political revolution
+      'Q124757',     // riot
+      'Q2223653',    // protest
+      'Q1006311',    // coup d'état
+    ],
+    dateProperty: 'P585',
+    weight: 1.5,
+  },
+  {
+    // Deliberately lower weight than other themes so battles/wars/campaigns
+    // don't dominate the timeline.
+    id: 'warfare',
+    label: 'Warfare',
+    types: [
+      'Q178561',     // battle
+      'Q198',        // war
+      'Q831663',     // military campaign
+    ],
+    dateProperty: 'P585',
+    weight: 1,
+  },
+];
+
 async function discoverFromWikidata(
   startYear: number,
   endYear: number,
@@ -73,48 +249,112 @@ async function discoverFromWikidata(
   // For deep time (geological, cosmic), it has limited coverage.
   if (startYear < -10000) return [];
 
-  // Build SPARQL query for events in the year range.
-  // Filter to actual event types (not years, centuries, or list articles).
-  // Broad coverage across military, political, cultural, scientific, and disaster events.
+  const category = getCategory(startYear);
+  const startInt = Math.floor(startYear);
+  const endInt = Math.ceil(endYear);
+
+  // Compute per-theme quotas from weights. Minimum 1 per theme so every
+  // category gets a seat at the table even for small count requests.
+  const totalWeight = THEMES.reduce((sum, t) => sum + t.weight, 0);
+  const quotas = THEMES.map(t => ({
+    theme: t,
+    quota: Math.max(1, Math.round((t.weight / totalWeight) * count * 1.4)),
+  }));
+
+  // Run all theme queries in parallel. Wikidata's SPARQL endpoint handles
+  // concurrent requests fine; the total wall time is ~one query's latency.
+  const themeResults = await Promise.all(
+    quotas.map(({ theme, quota }) =>
+      queryThemeEvents(theme, startInt, endInt, quota * 3, existingTitles, category),
+    ),
+  );
+
+  // Round-robin merge so the final list mixes themes rather than showing
+  // all science first, then all literature, etc. Take up to `quota` from
+  // each theme per pass. Hard-cap iterations to the largest possible quota
+  // so a pathological theme result can't trap us in the loop.
+  const seenTitles = new Set<string>();
+  const merged: any[] = [];
+  const indices = new Array(THEMES.length).fill(0);
+  const maxPasses = Math.max(...quotas.map(q => q.quota));
+
+  let added = true;
+  let passes = 0;
+  while (merged.length < count * 2 && added && passes < maxPasses) {
+    added = false;
+    passes++;
+    for (let i = 0; i < themeResults.length; i++) {
+      const quota = quotas[i]!.quota;
+      const taken = indices[i];
+      if (taken >= quota) continue;
+      const pool = themeResults[i]!;
+      while (indices[i] < pool.length) {
+        const ev = pool[indices[i]++]!;
+        if (seenTitles.has(ev.title)) continue;
+        seenTitles.add(ev.title);
+        merged.push(ev);
+        added = true;
+        break;
+      }
+    }
+  }
+
+  // If the quota-based pass left us short, backfill from any leftover
+  // events the themes returned (still de-duped). Prevents empty cells
+  // in periods where some themes have sparse data.
+  if (merged.length < count) {
+    for (let i = 0; i < themeResults.length && merged.length < count * 2; i++) {
+      for (const ev of themeResults[i]!) {
+        if (seenTitles.has(ev.title)) continue;
+        seenTitles.add(ev.title);
+        merged.push(ev);
+      }
+    }
+  }
+
+  // Sort chronologically, then sample evenly across the range if we have
+  // too many. This spreads events across time instead of clustering.
+  merged.sort((a, b) => a.year - b.year);
+  if (merged.length > count) {
+    const step = merged.length / count;
+    const sampled: any[] = [];
+    for (let i = 0; i < count; i++) {
+      sampled.push(merged[Math.floor(i * step)]!);
+    }
+    return sampled;
+  }
+
+  return merged;
+}
+
+/**
+ * Query Wikidata for events of a specific theme within a year range.
+ * Returns raw event objects ready to merge into the final discovery set.
+ */
+async function queryThemeEvents(
+  theme: ThemeSpec,
+  startYear: number,
+  endYear: number,
+  limit: number,
+  existingTitles: Set<string>,
+  category: string,
+): Promise<any[]> {
+  const typesClause = theme.types.map(t => `wd:${t}`).join(' ');
+  const dateP = theme.dateProperty;
+
   const query = `
     SELECT DISTINCT ?event ?eventLabel ?date ?coord ?articleTitle WHERE {
-      ?event wdt:P585 ?date .
+      ?event wdt:${dateP} ?date .
       ?event wdt:P31 ?type .
-      VALUES ?type {
-        wd:Q1190554   # occurrence
-        wd:Q13418847  # historical event
-        wd:Q178561    # battle
-        wd:Q198       # war
-        wd:Q831663    # military campaign
-        wd:Q93288     # treaty
-        wd:Q131569    # legislation / act of parliament
-        wd:Q35127     # revolution
-        wd:Q7278      # political revolution
-        wd:Q124757    # riot
-        wd:Q2223653   # protest
-        wd:Q476300    # epidemic
-        wd:Q3839081   # disaster
-        wd:Q15275719  # recurring event edition
-        wd:Q3505845   # international incident
-        wd:Q1006311   # coup d'etat (subclass)
-        wd:Q17317604  # expedition
-        wd:Q1348589   # political crisis
-        wd:Q7283      # terrorism
-        wd:Q175331    # mutiny
-        wd:Q12184     # pandemic
-        wd:Q8065      # natural disaster
-        wd:Q5765950   # massacre
-        wd:Q6974      # assassination
-        wd:Q8261      # novel
-      }
-      FILTER(YEAR(?date) >= ${Math.floor(startYear)} && YEAR(?date) <= ${Math.ceil(endYear)})
+      VALUES ?type { ${typesClause} }
+      FILTER(YEAR(?date) >= ${startYear} && YEAR(?date) <= ${endYear})
       ?article schema:about ?event ;
                schema:isPartOf <https://en.wikipedia.org/> ;
                schema:name ?articleTitle .
       OPTIONAL { ?event wdt:P625 ?coord }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
     }
-    LIMIT ${Math.min(count * 5, 100)}
+    LIMIT ${Math.min(limit, 50)}
   `;
 
   try {
@@ -127,23 +367,25 @@ async function discoverFromWikidata(
     const data = await resp.json();
     const results: any[] = [];
     const seen = new Set<string>();
-    const category = getCategory(startYear);
 
     for (const binding of data.results?.bindings ?? []) {
       const label = binding.eventLabel?.value;
-      if (!label || label.startsWith('Q')) continue; // Skip unresolved QIDs
+      if (!label || label.startsWith('Q')) continue;
       if (existingTitles.has(label)) continue;
       if (seen.has(label)) continue;
       seen.add(label);
 
       const dateStr = binding.date?.value;
-      const year = dateStr ? new Date(dateStr).getFullYear() : NaN;
-      if (isNaN(year)) continue;
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      const intYear = d.getFullYear();
+      if (isNaN(intYear)) continue;
+      const dayOfYear = (d.getTime() - new Date(intYear, 0, 1).getTime()) / (1000 * 60 * 60 * 24);
+      const year = intYear + dayOfYear / 365.25;
 
       const wikiTitle = binding.articleTitle?.value;
-      const description = label;
+      const timestamp = dateStr.slice(0, 10);
 
-      // Parse coordinates if available
       let lat: number | undefined;
       let lng: number | undefined;
       if (binding.coord?.value) {
@@ -157,25 +399,18 @@ async function discoverFromWikidata(
       results.push({
         title: label,
         year,
-        description,
+        timestamp,
+        precision: timestamp.endsWith('01-01') ? 'year' : 'day',
+        description: label,
         category,
         color: getCategoryColor(category),
+        theme: theme.id,
+        themeLabel: theme.label,
         wiki: wikiTitle,
         lat,
         lng,
         geoType: lat !== undefined ? 'point' : undefined,
       });
-    }
-
-    // Spread events evenly across the range by sorting and sampling
-    results.sort((a, b) => a.year - b.year);
-    if (results.length > count) {
-      const step = results.length / count;
-      const sampled: any[] = [];
-      for (let i = 0; i < count; i++) {
-        sampled.push(results[Math.floor(i * step)]!);
-      }
-      return sampled;
     }
 
     return results;
@@ -297,8 +532,8 @@ export function registerDiscoverRoutes(handleRoute: RouteHandler, dbReady: () =>
 
     // ── Phase 4: Persist to DB + mark region ──
     if (dbReady() && events.length > 0) {
-      const dbEvents = events.map((e: any, i: number) => ({
-        id: `d-${tierId}-${startYear}-${i}`,
+      const dbEvents = events.map((e: any) => ({
+        id: stableId('d', e.title, e.year),
         title: e.title, year: e.year, timestamp: e.timestamp || null,
         precision: e.precision || 'year', emoji: e.emoji || '', color: e.color,
         description: e.description, category: e.category, source: 'discovered',

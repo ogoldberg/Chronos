@@ -234,6 +234,7 @@ export default function App() {
             event={selectedEvent}
             onClose={() => setSelectedEvent(null)}
             onAskGuide={(q) => { setSelectedEvent(null); setChatInitMsg(q); openPanel('chat'); }}
+            onNavigate={(y, s) => { setSelectedEvent(null); animateTo(y, s); }}
           />
         </>
       )}

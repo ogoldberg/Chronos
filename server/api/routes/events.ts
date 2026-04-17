@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { getEventsInRange, searchEvents, upsertEvents } from '../../db';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
+import { discoverRelatedEvents, getCachedEventContext, resolveQID } from '../../services/wikidataGraph';
 import type { RouteHandler } from '../index';
 
 const eventsQuerySchema = z.object({
@@ -119,5 +120,64 @@ export function registerEventsRoutes(handleRoute: RouteHandler, dbReady: () => b
 
     await upsertEvents(toUpsert);
     return { status: 200, data: { ingested: toUpsert.length, ids: toUpsert.map(e => e.id) } };
+  });
+
+  // ── POST /api/events/related — discover related events via Wikidata graph ──
+
+  // Tight bounds on wikiTitle: 300 chars is well above any real Wikipedia
+  // article length, prevents query ballooning and DoS via huge inputs.
+  // Reject control chars at the schema level so they never reach the
+  // SPARQL escaper as a defense-in-depth measure.
+  const wikiTitleSchema = z.string().min(1).max(300).regex(
+    // eslint-disable-next-line no-control-regex
+    /^[^\u0000-\u001f\u007f]+$/,
+    'Title must not contain control characters',
+  );
+
+  const relatedSchema = z.object({
+    wikiTitle: wikiTitleSchema,
+  });
+
+  handleRoute('POST', '/api/events/related', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('events-related', getClientIP(reqHeaders || {}))) {
+      return { status: 429, data: { error: 'Rate limit exceeded' } };
+    }
+    const parsed = validate(relatedSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+
+    try {
+      const related = await discoverRelatedEvents(parsed.data.wikiTitle);
+      return { status: 200, data: { related } };
+    } catch (err: any) {
+      console.error('[events/related] Failed:', err.message);
+      return { status: 500, data: { error: 'Failed to discover related events' } };
+    }
+  });
+
+  // ── POST /api/events/context — full Wikidata graph context for an event ──
+
+  const contextSchema = z.object({
+    wikiTitle: wikiTitleSchema,
+  });
+
+  handleRoute('POST', '/api/events/context', null, async (body, _url, reqHeaders) => {
+    if (!checkRateLimit('events-context', getClientIP(reqHeaders || {}))) {
+      return { status: 429, data: { error: 'Rate limit exceeded' } };
+    }
+    const parsed = validate(contextSchema, body);
+    if (!parsed.success) return { status: 400, data: { error: parsed.error } };
+
+    try {
+      const qid = await resolveQID(parsed.data.wikiTitle);
+      if (!qid) return { status: 404, data: { error: 'Event not found in Wikidata' } };
+
+      const context = await getCachedEventContext(qid);
+      if (!context) return { status: 404, data: { error: 'No graph data available' } };
+
+      return { status: 200, data: { context } };
+    } catch (err: any) {
+      console.error('[events/context] Failed:', err.message);
+      return { status: 500, data: { error: 'Failed to fetch event context' } };
+    }
   });
 }

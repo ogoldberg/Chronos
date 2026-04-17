@@ -42,9 +42,9 @@ export function formatYearShort(y: number): string {
   if (a >= 1e9) return `${(a / 1e9).toFixed(a >= 1e10 ? 0 : 1)}B`;
   if (a >= 1e6) return `${(a / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M`;
   if (a >= 1e4) return `${(a / 1e3).toFixed(0)}K${y < 0 ? ' BCE' : ''}`;
-  if (y < 0) return `${a} BCE`;
+  if (y < 0) return `${Math.round(a)} BCE`;
   if (y === 0) return '1 CE';
-  return `${y}`;
+  return `${Math.round(y)}`;
 }
 
 export function scaleLabel(span: number): string {
