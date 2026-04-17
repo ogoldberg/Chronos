@@ -20,6 +20,12 @@ const ENDPOINT_LIMITS: Record<string, number> = {
   'search': 60,
   'today': 10,
   'figures': 15,
+  // Wikidata-backed endpoints. Each call fans out to up to 3 SPARQL
+  // round trips, so we cap them lower than discover to avoid pinning
+  // Wikidata's public endpoint when modals are opened in rapid succession.
+  'events-related': 15,
+  'events-context': 15,
+  'events-ingest': 30,
 };
 
 /**

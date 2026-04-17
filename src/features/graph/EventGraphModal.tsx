@@ -76,6 +76,14 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [nodeCount, setNodeCount] = useState(0);
 
+  // Mirror hover/select into refs so the render loop can read them without
+  // needing to be a useEffect dependency. Without this, every mouse move
+  // tore down the animation loop and re-ran the warm-up damping phase.
+  const hoveredNodeRef = useRef<string | null>(null);
+  const selectedNodeRef = useRef<string | null>(null);
+  useEffect(() => { hoveredNodeRef.current = hoveredNode; }, [hoveredNode]);
+  useEffect(() => { selectedNodeRef.current = selectedNode; }, [selectedNode]);
+
   // Camera
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1 });
   const dragRef = useRef({ active: false, startX: 0, startY: 0, camX: 0, camY: 0 });
@@ -83,13 +91,18 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
   // Fetch related events and build graph
   useEffect(() => {
     setLoading(true);
+    setError('');
+    const controller = new AbortController();
+    let cancelled = false;
     fetch('/api/events/related', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ wikiTitle: eventWiki }),
+      signal: controller.signal,
     })
       .then(r => r.json())
       .then(data => {
+        if (cancelled) return;
         const related: RelatedEvent[] = data.related || [];
         if (related.length === 0) {
           // Wikidata's knowledge graph is uneven — well-documented events
@@ -222,10 +235,15 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
         setNodeCount(nodes.length);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (cancelled || (err as { name?: string })?.name === 'AbortError') return;
         setError('Failed to load graph data');
         setLoading(false);
       });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [eventTitle, eventYear, eventWiki]);
 
   // Coordinate transforms
@@ -252,7 +270,9 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
     return null;
   }, [screenToWorld]);
 
-  // Physics + render loop
+  // Physics + render loop. Intentionally excludes hoveredNode/selectedNode
+  // from deps — those are read via refs inside `tick` so a mouse move
+  // doesn't tear down and re-create the animation loop.
   useEffect(() => {
     if (loading || nodeCount === 0) return;
 
@@ -260,6 +280,31 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // Path2D-based roundRect fallback for browsers without
+    // CanvasRenderingContext2D.roundRect (Safari < 16, older Chromium).
+    // Without this, the entire render loop throws on first label draw.
+    const drawRoundRect = (
+      x: number, y: number, w: number, h: number, r: number,
+    ) => {
+      const c = ctx as CanvasRenderingContext2D & {
+        roundRect?: (x: number, y: number, w: number, h: number, r: number) => void;
+      };
+      if (typeof c.roundRect === 'function') {
+        c.roundRect(x, y, w, h, r);
+        return;
+      }
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.moveTo(x + rr, y);
+      ctx.lineTo(x + w - rr, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+      ctx.lineTo(x + w, y + h - rr);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+      ctx.lineTo(x + rr, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+      ctx.lineTo(x, y + rr);
+      ctx.quadraticCurveTo(x, y, x + rr, y);
+    };
 
     let running = true;
     let frame = 0;
@@ -281,6 +326,8 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
       const nodes = nodesRef.current;
       const edges = edgesRef.current;
       const cam = cameraRef.current;
+      const hoveredNode = hoveredNodeRef.current;
+      const selectedNode = selectedNodeRef.current;
       const w = canvas.width / window.devicePixelRatio;
       const h = canvas.height / window.devicePixelRatio;
       frame++;
@@ -406,7 +453,7 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
           // Background pill
           ctx.fillStyle = `rgba(10,14,22,${labelAlpha})`;
           ctx.beginPath();
-          ctx.roundRect(-pillW / 2, -pillH / 2 - 2 / cam.zoom, pillW, pillH, 4 / cam.zoom);
+          drawRoundRect(-pillW / 2, -pillH / 2 - 2 / cam.zoom, pillW, pillH, 4 / cam.zoom);
           ctx.fill();
 
           ctx.fillStyle = color + Math.round(labelAlpha * 255).toString(16).padStart(2, '0');
@@ -518,7 +565,7 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('resize', resize);
     };
-  }, [loading, nodeCount, hoveredNode, selectedNode]);
+  }, [loading, nodeCount]);
 
   // Mouse handlers
   const handleMouseMove = useCallback((e: React.MouseEvent) => {

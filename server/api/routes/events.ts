@@ -124,8 +124,18 @@ export function registerEventsRoutes(handleRoute: RouteHandler, dbReady: () => b
 
   // ── POST /api/events/related — discover related events via Wikidata graph ──
 
+  // Tight bounds on wikiTitle: 300 chars is well above any real Wikipedia
+  // article length, prevents query ballooning and DoS via huge inputs.
+  // Reject control chars at the schema level so they never reach the
+  // SPARQL escaper as a defense-in-depth measure.
+  const wikiTitleSchema = z.string().min(1).max(300).regex(
+    // eslint-disable-next-line no-control-regex
+    /^[^\u0000-\u001f\u007f]+$/,
+    'Title must not contain control characters',
+  );
+
   const relatedSchema = z.object({
-    wikiTitle: z.string().min(1),
+    wikiTitle: wikiTitleSchema,
   });
 
   handleRoute('POST', '/api/events/related', null, async (body, _url, reqHeaders) => {
@@ -147,7 +157,7 @@ export function registerEventsRoutes(handleRoute: RouteHandler, dbReady: () => b
   // ── POST /api/events/context — full Wikidata graph context for an event ──
 
   const contextSchema = z.object({
-    wikiTitle: z.string().min(1),
+    wikiTitle: wikiTitleSchema,
   });
 
   handleRoute('POST', '/api/events/context', null, async (body, _url, reqHeaders) => {

@@ -41,6 +41,27 @@ function pruneMemoryCache() {
   for (const [key] of entries.slice(0, entries.length - MAX_CACHE_SIZE)) memoryCache.delete(key);
 }
 
+/**
+ * Stable id from hash(title+year). Re-running discovery for the same
+ * region returns events in slightly different order from Wikidata, so a
+ * positional id like `d-${tierId}-${i}` would silently overwrite rows
+ * with new contents under the same primary key. The hash gives one row
+ * per real event — re-runs upsert in place.
+ *
+ * FNV-1a is plenty for a deduplication key; collision resistance isn't
+ * load-bearing here. Same algorithm as events.ts:91 to keep both ingest
+ * paths producing comparable identifiers.
+ */
+function stableId(source: string, title: string, year: number): string {
+  const str = `${title.trim().toLowerCase()}::${Math.round(year * 1000) / 1000}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `${source}-${(h >>> 0).toString(36)}`;
+}
+
 function getCategory(startYear: number): string {
   const absStart = Math.abs(startYear);
   if (absStart > 1e9) return 'cosmic';
@@ -250,14 +271,18 @@ async function discoverFromWikidata(
 
   // Round-robin merge so the final list mixes themes rather than showing
   // all science first, then all literature, etc. Take up to `quota` from
-  // each theme per pass.
+  // each theme per pass. Hard-cap iterations to the largest possible quota
+  // so a pathological theme result can't trap us in the loop.
   const seenTitles = new Set<string>();
   const merged: any[] = [];
   const indices = new Array(THEMES.length).fill(0);
+  const maxPasses = Math.max(...quotas.map(q => q.quota));
 
   let added = true;
-  while (merged.length < count * 2 && added) {
+  let passes = 0;
+  while (merged.length < count * 2 && added && passes < maxPasses) {
     added = false;
+    passes++;
     for (let i = 0; i < themeResults.length; i++) {
       const quota = quotas[i]!.quota;
       const taken = indices[i];
@@ -507,8 +532,8 @@ export function registerDiscoverRoutes(handleRoute: RouteHandler, dbReady: () =>
 
     // ── Phase 4: Persist to DB + mark region ──
     if (dbReady() && events.length > 0) {
-      const dbEvents = events.map((e: any, i: number) => ({
-        id: `d-${tierId}-${startYear}-${i}`,
+      const dbEvents = events.map((e: any) => ({
+        id: stableId('d', e.title, e.year),
         title: e.title, year: e.year, timestamp: e.timestamp || null,
         precision: e.precision || 'year', emoji: e.emoji || '', color: e.color,
         description: e.description, category: e.category, source: 'discovered',
