@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { getPool } from '../../db';
 import { getAuth } from '../../auth';
 import { getProviderForRequest } from '../../providers/index';
-import { CURRICULUM_SYSTEM } from '../../prompts';
+import { CURRICULUM_SYSTEM } from '../../../src/ai/prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';

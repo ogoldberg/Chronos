@@ -5,7 +5,7 @@
 import { z } from 'zod';
 import { getProviderForRequest } from '../../providers/index';
 import { upsertEvents } from '../../db';
-import { LENS_DISCOVERY_SYSTEM } from '../../prompts';
+import { LENS_DISCOVERY_SYSTEM } from '../../../src/ai/prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';

@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { getProviderForRequest } from '../../providers/index';
-import { SOURCE_COMPARISON_SYSTEM, PRIMARY_SOURCES_SYSTEM } from '../../prompts';
+import { SOURCE_COMPARISON_SYSTEM, PRIMARY_SOURCES_SYSTEM } from '../../../src/ai/prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import { unbrowserEnabled, verifyClaims } from '../../services/unbrowser';

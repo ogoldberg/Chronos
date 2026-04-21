@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import { getProviderForRequest } from '../../providers/index';
-import { INSIGHTS_SYSTEM } from '../../prompts';
+import { INSIGHTS_SYSTEM } from '../../../src/ai/prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import { getCachedInsights, setCachedInsights, upsertEvents } from '../../db';

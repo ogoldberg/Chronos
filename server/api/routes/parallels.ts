@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import { getProviderForRequest } from '../../providers/index';
-import { PARALLELS_SYSTEM } from '../../prompts';
+import { PARALLELS_SYSTEM } from '../../../src/ai/prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';

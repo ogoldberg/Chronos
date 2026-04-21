@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import { getProviderForRequest, MissingAPIKeyError } from '../../providers/index';
-import { CHAT_SYSTEM } from '../../prompts';
+import { CHAT_SYSTEM } from '../../../src/ai/prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';

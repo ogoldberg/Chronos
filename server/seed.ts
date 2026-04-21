@@ -15,7 +15,7 @@
 import { initDB, upsertEvents, getEventsInRange } from './db';
 import { getCacheRegion, markCacheRegion, logDiscovery } from './db';
 import { createProvider } from './providers/index';
-import { DISCOVER_SYSTEM } from './prompts';
+import { DISCOVER_SYSTEM } from '../src/ai/prompts';
 import { ANCHOR_EVENTS } from '../src/data/anchorEvents';
 
 // ── Configuration ──
