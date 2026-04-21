@@ -80,7 +80,7 @@ async function fetchWikipediaOnThisDay(month: number, day: number): Promise<OnTh
   const url = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/${mm}/${dd}`;
 
   const resp = await fetch(url, {
-    headers: { 'User-Agent': 'Chronos/1.0 (https://github.com/chronos; contact@chronos.app)' },
+    headers: { 'User-Agent': 'Chronos/1.0 (https://chronosapp.org; contact@chronosapp.org)' },
   });
   if (!resp.ok) throw new Error(`Wikipedia API returned ${resp.status}`);
 
@@ -187,7 +187,7 @@ async function fetchWikidataEvents(month: number, day: number): Promise<OnThisDa
   try {
     const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}&format=json`;
     const resp = await fetch(url, {
-      headers: { 'User-Agent': 'Chronos/1.0 (https://github.com/chronos; contact@chronos.app)' },
+      headers: { 'User-Agent': 'Chronos/1.0 (https://chronosapp.org; contact@chronosapp.org)' },
     });
     if (!resp.ok) return []; // Graceful fallback — Wikidata is supplementary
 

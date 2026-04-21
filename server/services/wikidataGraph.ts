@@ -7,7 +7,7 @@
  */
 
 const WIKIDATA_SPARQL = 'https://query.wikidata.org/sparql';
-const USER_AGENT = 'Chronos/1.0 (https://github.com/chronos; contact@chronos.app)';
+const USER_AGENT = 'Chronos/1.0 (https://chronosapp.org; contact@chronosapp.org)';
 const SPARQL_TIMEOUT_MS = 15_000;
 const MAX_TITLE_LENGTH = 300;
 const QID_PATTERN = /^Q[0-9]+$/;

@@ -3,7 +3,7 @@ import { exportEventsJSON, generateEmbedSnippet } from '../export';
 import type { TimelineEvent, Viewport } from '../../types';
 
 // Mock window.location for URL generation
-vi.stubGlobal('window', { location: { origin: 'https://chronos.app', pathname: '/' } });
+vi.stubGlobal('window', { location: { origin: 'https://chronosapp.org', pathname: '/' } });
 
 const mockViewport: Viewport = { centerYear: 1776, span: 50 };
 

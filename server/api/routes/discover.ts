@@ -360,7 +360,7 @@ async function queryThemeEvents(
   try {
     const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}&format=json`;
     const resp = await fetch(url, {
-      headers: { 'User-Agent': 'Chronos/1.0 (https://github.com/chronos; contact@chronos.app)' },
+      headers: { 'User-Agent': 'Chronos/1.0 (https://chronosapp.org; contact@chronosapp.org)' },
     });
     if (!resp.ok) return [];
 
