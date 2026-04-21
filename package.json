@@ -1,8 +1,31 @@
 {
   "name": "chronos",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "An infinite zoomable timeline of everything — Big Bang to today. Wikidata-backed event discovery, knowledge-graph visualization, and zero-trust BYOK AI features.",
   "type": "module",
+  "license": "MIT",
+  "author": "Oren Goldberg",
+  "homepage": "https://chronosapp.org",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ogoldberg/chronos.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ogoldberg/chronos/issues"
+  },
+  "keywords": [
+    "timeline",
+    "history",
+    "wikidata",
+    "wikipedia",
+    "visualization",
+    "knowledge-graph",
+    "byok",
+    "anthropic",
+    "openai",
+    "gemini",
+    "education"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
