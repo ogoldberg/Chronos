@@ -475,7 +475,7 @@ export async function discoverRelatedEvents(
   const qid = assertValidQid(rawQid);
 
   const bindings = await sparql(`
-    SELECT DISTINCT ?relation ?related ?relatedLabel ?relatedDate ?relatedDescription ?articleTitle ?parentLabel WHERE {
+    SELECT DISTINCT ?relation ?related ?relatedLabel ?relatedDate ?relatedStart ?relatedPubDate ?relatedInception ?relatedDescription ?articleTitle ?parentLabel WHERE {
       {
         wd:${qid} wdt:P828 ?related .
         BIND("Caused by" AS ?relation) BIND("" AS ?parentLabel)
@@ -502,6 +502,9 @@ export async function discoverRelatedEvents(
         BIND("Part of" AS ?relation) BIND("" AS ?parentLabel)
       }
       OPTIONAL { ?related wdt:P585 ?relatedDate }
+      OPTIONAL { ?related wdt:P580 ?relatedStart }
+      OPTIONAL { ?related wdt:P577 ?relatedPubDate }
+      OPTIONAL { ?related wdt:P571 ?relatedInception }
       OPTIONAL {
         ?article schema:about ?related ;
                  schema:isPartOf <https://en.wikipedia.org/> ;
@@ -523,7 +526,14 @@ export async function discoverRelatedEvents(
       return true;
     })
     .map(b => {
-      const dateStr = b.relatedDate?.value;
+      // Many Wikidata entries lack P585 (point in time) but do have
+      // P580 (start time), P577 (publication date), or P571 (inception).
+      // Fall through to those so events like "Battle of Ochakiv" that only
+      // carry a start date still get a navigable year in the graph.
+      const dateStr = b.relatedDate?.value
+        ?? b.relatedStart?.value
+        ?? b.relatedPubDate?.value
+        ?? b.relatedInception?.value;
       const rawRelation = b.relation?.value ?? '';
       const parentLabel = b.parentLabel?.value || '';
       // Build a specific relation label

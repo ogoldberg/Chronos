@@ -760,29 +760,69 @@ export default function EventGraphModal({ eventTitle, eventYear, eventWiki, onNa
                 {selectedInfo.description.slice(0, 200)}
               </div>
             )}
-            <button
-              onClick={() => {
-                if (selectedInfo.year) {
-                  onNavigate(Math.round(selectedInfo.year), 5);
+            {/*
+              The "Navigate" button only works when Wikidata has a date for
+              the sibling event. For undated events, we show a Wikipedia
+              link instead so the user always has a useful next action —
+              clicking a dead-grey button and getting nothing is the
+              frustrating dead-end the old design created.
+            */}
+            {selectedInfo.year ? (
+              <button
+                onClick={() => {
+                  onNavigate(Math.round(selectedInfo.year!), 5);
                   onClose();
-                }
-              }}
-              style={{
+                }}
+                style={{
+                  marginTop: 10,
+                  width: '100%',
+                  padding: '7px 12px',
+                  background: 'rgba(255,180,60,0.12)',
+                  border: '1px solid rgba(255,180,60,0.25)',
+                  borderRadius: 8,
+                  color: '#ffcc70',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Navigate to this event
+              </button>
+            ) : selectedInfo.wiki ? (
+              <a
+                href={`https://en.wikipedia.org/wiki/${encodeURIComponent(selectedInfo.wiki)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block',
+                  marginTop: 10,
+                  width: '100%',
+                  padding: '7px 12px',
+                  background: 'rgba(96,165,250,0.10)',
+                  border: '1px solid rgba(96,165,250,0.25)',
+                  borderRadius: 8,
+                  color: '#60a5fa',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textAlign: 'center',
+                  textDecoration: 'none',
+                  boxSizing: 'border-box',
+                }}
+              >
+                Read on Wikipedia ↗
+              </a>
+            ) : (
+              <div style={{
                 marginTop: 10,
-                width: '100%',
                 padding: '7px 12px',
-                background: 'rgba(255,180,60,0.12)',
-                border: '1px solid rgba(255,180,60,0.25)',
-                borderRadius: 8,
-                color: '#ffcc70',
+                color: 'rgba(255,255,255,0.35)',
                 fontSize: 11,
-                fontWeight: 600,
-                cursor: selectedInfo.year ? 'pointer' : 'default',
-                opacity: selectedInfo.year ? 1 : 0.4,
-              }}
-            >
-              Navigate to this event
-            </button>
+                fontStyle: 'italic',
+                textAlign: 'center',
+              }}>
+                No date in Wikidata yet
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -54,7 +54,11 @@ export default function ThemedTimelinesControl() {
           if (!enabled) toggle();
           setExpanded(v => !v);
         }}
-        title={enabled ? 'Hide parallel themed timelines' : 'Show parallel themed timelines'}
+        title={
+          enabled
+            ? (expanded ? 'Collapse theme panel' : 'Adjust themes or turn off')
+            : 'Show parallel themed timelines'
+        }
         style={{
           background: enabled ? 'rgba(244,236,216,0.12)' : 'rgba(13,17,23,0.85)',
           border: `1px solid ${enabled ? 'rgba(244,236,216,0.3)' : 'rgba(255,255,255,0.08)'}`,
@@ -92,16 +96,45 @@ export default function ThemedTimelinesControl() {
         >
           <div
             style={{
-              fontFamily: 'var(--font-display, Georgia, serif)',
-              fontStyle: 'italic',
-              fontSize: 10,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               padding: '2px 4px 6px',
             }}
           >
-            Themes
+            <span
+              style={{
+                fontFamily: 'var(--font-display, Georgia, serif)',
+                fontStyle: 'italic',
+                fontSize: 10,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.4)',
+              }}
+            >
+              Themes
+            </span>
+            <button
+              onClick={() => {
+                toggle();
+                setExpanded(false);
+              }}
+              title="Turn off parallel threads"
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 6,
+                color: 'rgba(255,255,255,0.6)',
+                fontSize: 10,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                padding: '3px 8px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Turn off
+            </button>
           </div>
           {THEMES.map(theme => (
             <ThemeRow
