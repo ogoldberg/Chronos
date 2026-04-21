@@ -171,7 +171,6 @@ export function discoverEvents(
         activeRequests++;
         fetchCell(tier, cellStart, cellEnd, existingTitles)
           .then(events => {
-            console.log(`[Discovery] ${key}: ${events.length} events from ${cellStart}-${cellEnd}`);
             cellStates.set(key, { status: 'loaded', events });
             if (events.length > 0) onNewEvents(events);
           })
