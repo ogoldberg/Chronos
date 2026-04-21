@@ -151,7 +151,10 @@ async function sparql(query: string): Promise<any[]> {
  */
 class BoundedCache<K, V> {
   private map = new Map<K, V>();
-  constructor(private readonly maxSize: number) {}
+  private readonly maxSize: number;
+  constructor(maxSize: number) {
+    this.maxSize = maxSize;
+  }
   has(key: K): boolean { return this.map.has(key); }
   get(key: K): V | undefined { return this.map.get(key); }
   set(key: K, value: V): void {

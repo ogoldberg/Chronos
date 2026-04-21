@@ -18,7 +18,6 @@
  */
 
 import type { AIProvider, AIProviderConfig } from './types';
-import { MissingAPIKeyError } from './types';
 import { AnthropicProvider } from './anthropic';
 import { OpenAIProvider } from './openai';
 import { GoogleProvider } from './google';

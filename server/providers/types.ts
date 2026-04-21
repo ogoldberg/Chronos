@@ -68,8 +68,10 @@ export interface AIChatOptions {
  */
 export class MissingAPIKeyError extends Error {
   readonly kind = 'missing_api_key';
-  constructor(public readonly provider: string) {
+  readonly provider: string;
+  constructor(provider: string) {
     super(`No API key provided for ${provider}. Users must supply their own key via the Settings panel.`);
+    this.provider = provider;
   }
 }
 

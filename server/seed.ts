@@ -186,7 +186,7 @@ async function main() {
 
           await upsertEvents(dbEvents);
           await markCacheRegion(tier.id, cellIndex, cellStart, cellEnd, events.length);
-          await logDiscovery(tier.id, cellStart, cellEnd, config.provider, config.model, events.length, dbEvents.length, undefined, Date.now() - t0);
+          await logDiscovery(tier.id, cellStart, cellEnd, providerName, model, events.length, dbEvents.length, undefined, Date.now() - t0);
 
           totalEvents += events.length;
           totalCells++;
