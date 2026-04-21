@@ -68,31 +68,11 @@ export default function AISettings({ onClose, reason }: Props) {
     }
     setTestStatus({ kind: 'testing' });
     try {
-      const resp = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Provider': provider,
-          'X-User-Model': model,
-          ...(apiKey ? { 'X-User-API-Key': apiKey } : {}),
-          ...(baseUrl ? { 'X-User-Base-Url': baseUrl } : {}),
-        },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: 'Say "ok".' }],
-        }),
-      });
-      if (resp.ok) {
-        setTestStatus({ kind: 'ok', message: 'Connected successfully.' });
-      } else {
-        const body = await resp.json().catch(() => ({}));
-        setTestStatus({
-          kind: 'error',
-          message:
-            body?.message ||
-            body?.error ||
-            `Server returned ${resp.status}.`,
-        });
-      }
+      // Go straight to the provider — same path the app itself uses. This
+      // is an honest end-to-end test; nothing in between can help or hurt.
+      const { callAI } = await import('../../ai/callAI');
+      await callAI('You are a test.', [{ role: 'user', content: 'Say "ok".' }], { maxTokens: 10 });
+      setTestStatus({ kind: 'ok', message: 'Connected successfully.' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Network error.';
       setTestStatus({ kind: 'error', message: msg });
@@ -106,7 +86,8 @@ export default function AISettings({ onClose, reason }: Props) {
           <div>
             <div style={titleStyle}>AI Settings</div>
             <div style={subtitleStyle}>
-              Bring your own API key — Chronos never stores or logs it.
+              Bring your own API key — your key and every AI request go
+              straight to the provider. Chronos never sees them.
             </div>
           </div>
           <button onClick={onClose} style={closeBtnStyle} aria-label="Close">
@@ -121,23 +102,26 @@ export default function AISettings({ onClose, reason }: Props) {
           </div>
         )}
 
-        {/* Privacy reassurance. The key only ever lives in the user's
-            browser; it's passed through our server as a header so we can
-            reach the AI provider on their behalf, but we don't cache,
-            log, or persist it anywhere. */}
+        {/* Privacy reassurance — the key never leaves the browser.
+            Every AI call is a direct HTTPS request from this tab to the
+            provider's API. Our server is never in the path for AI
+            traffic. This is zero-trust by design, not by promise. */}
         <div style={privacyBannerStyle}>
           <div style={{ fontWeight: 600, marginBottom: 4, color: '#a7f3d0' }}>
-            🔒 Your key stays yours
+            🔒 Your key never leaves this browser
           </div>
           <div style={{ color: 'rgba(255,255,255,0.7)' }}>
-            Your API key lives only in this browser's localStorage. Each AI
-            request forwards it straight to your chosen provider — Chronos
-            never logs, stores, caches, or shares it. There's no database row
-            with your key anywhere on our side.
+            AI requests go directly from this browser tab to your chosen
+            provider over HTTPS. Chronos has no API endpoint that receives
+            your key or your messages — the network traffic skips our
+            server entirely. You can verify this in your browser's devtools
+            Network tab (look for api.anthropic.com, api.openai.com, or
+            generativelanguage.googleapis.com — not our domain).
           </div>
           <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
-            Clear it any time with the "Clear key" button below. It's also removed
-            when you clear this browser's site data.
+            Your key lives in this browser's localStorage only. Clear it
+            any time with "Clear key" below; it also goes away when you
+            clear site data.
           </div>
         </div>
 
