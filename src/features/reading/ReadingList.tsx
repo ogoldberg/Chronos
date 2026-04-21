@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { READING_LIST_SYSTEM } from '../../ai/prompts';
 
 interface ReadingItem {
   title: string;
@@ -65,27 +66,31 @@ export default function ReadingList({ onClose, viewport }: Props) {
     setItems([]);
 
     try {
-      const resp = await aiFetch('/api/reading', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: t }),
-      });
-
-      if (resp.status === 429) {
-        setError('Too many requests. Please wait a moment and try again.');
-        setLoading(false);
-        return;
+      const system = READING_LIST_SYSTEM(t);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Generate a curated reading list for: "${t}"` }],
+        { maxTokens: 3000, webSearch: true },
+      );
+      let parsed: unknown[] = [];
+      const objMatch = text.match(/\{[\s\S]*"items"\s*:\s*\[[\s\S]*\]\s*\}/);
+      if (objMatch) {
+        try {
+          const j = JSON.parse(objMatch[0]);
+          if (Array.isArray(j.items)) parsed = j.items;
+        } catch { /* try array form */ }
       }
-
-      if (!resp.ok) {
-        setError('Failed to generate reading list. Try again.');
-        setLoading(false);
-        return;
+      if (parsed.length === 0) {
+        const arrMatch = text.match(/\[[\s\S]*\]/);
+        if (arrMatch) {
+          try {
+            const j = JSON.parse(arrMatch[0]);
+            if (Array.isArray(j)) parsed = j;
+          } catch { /* give up */ }
+        }
       }
-
-      const data = await resp.json();
-      if (data.items?.length) {
-        setItems(data.items);
+      if (parsed.length > 0) {
+        setItems(parsed as typeof items);
       } else {
         setError('Could not generate recommendations. Try a different topic.');
       }

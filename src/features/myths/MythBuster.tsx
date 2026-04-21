@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { HistoricalMyth } from '../../data/myths';
 import { MYTHS } from '../../data/myths';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { MYTHS_SYSTEM } from '../../ai/prompts';
 
 interface Props {
   onNavigate?: (year: number, span: number) => void;
@@ -89,13 +90,22 @@ export default function MythBuster({ onNavigate, onAskAI, onClose, centerYear, s
     if (!centerYear || !span) return;
     setLoadingAI(true);
     try {
-      const resp = await aiFetch('/api/myths', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ centerYear, span }),
-      });
-      if (resp.ok) {
-        const data = await resp.json() as { myths?: HistoricalMyth[] };
+      const system = MYTHS_SYSTEM(centerYear, span);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Generate 3 historical myths/misconceptions for the period around year ${centerYear} (span: ${span} years).` }],
+        { maxTokens: 1500, webSearch: true },
+      );
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      let myths: HistoricalMyth[] = [];
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed)) myths = parsed;
+        } catch { /* ignore */ }
+      }
+      {
+        const data = { myths } as { myths?: HistoricalMyth[] };
         if (data.myths?.length) {
           setAiMyths((prev) => {
             const existingIds = new Set(prev.map((m) => m.id));

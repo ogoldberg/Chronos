@@ -7,22 +7,13 @@ const buckets = new Map<string, { count: number; resetAt: number }>();
 const DEFAULT_LIMIT = 30; // requests per minute
 
 const ENDPOINT_LIMITS: Record<string, number> = {
+  // Free endpoints that still touch our server (Wikipedia/Wikidata proxies,
+  // DB-backed features). AI routes are gone — traffic that used to be rate
+  // limited here is now direct browser-to-provider and each provider runs
+  // its own per-key rate limits.
   'discover': 30,
-  'chat': 20,
-  'chat-stream': 20,
-  'insights': 20,
-  'quiz': 30,
-  'myths': 20,
-  'parallels': 15,
-  'whatif': 15,
-  'debate': 10,
-  'lens': 20,
   'search': 60,
   'today': 10,
-  'figures': 15,
-  // Wikidata-backed endpoints. Each call fans out to up to 3 SPARQL
-  // round trips, so we cap them lower than discover to avoid pinning
-  // Wikidata's public endpoint when modals are opened in rapid succession.
   'events-related': 15,
   'events-context': 15,
   'events-ingest': 30,

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { QUIZ_SYSTEM } from '../../ai/prompts';
 
 /* ─────────────────────────── Types ───────────────────────────────────── */
 
@@ -177,14 +178,21 @@ export default function StudentView({ onClose }: Props) {
     setQuizAnswer(null);
     setQuizSubmitted(false);
     try {
-      const res = await aiFetch('/api/quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ events: [], era: `${activeUnit.eraStart}-${activeUnit.eraEnd} ${activeUnit.title}` }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setQuizQuestion(data);
+      const era = `${activeUnit.eraStart}-${activeUnit.eraEnd} ${activeUnit.title}`;
+      const system = QUIZ_SYSTEM([], era);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Generate a history quiz question about ${era} era events.` }],
+        { maxTokens: 800 },
+      );
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.question && Array.isArray(parsed.options) && parsed.options.length === 4 && typeof parsed.correctIndex === 'number') {
+            setQuizQuestion(parsed);
+          }
+        } catch { /* ignore */ }
       }
     } catch { /* ignore */ }
     setQuizLoading(false);

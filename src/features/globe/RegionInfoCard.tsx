@@ -2,7 +2,17 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatYear } from '../../utils/format';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+
+function formatYearForPrompt(year: number): string {
+  const a = Math.abs(year);
+  if (a >= 1e9) return `${(a / 1e9).toFixed(1)} billion years ago`;
+  if (a >= 1e6) return `${(a / 1e6).toFixed(1)} million years ago`;
+  if (a >= 1e4) return `${Math.round(a / 1e3)}K ${year < 0 ? 'BCE' : 'CE'}`;
+  if (year < 0) return `${Math.round(a)} BCE`;
+  if (year === 0) return '1 CE';
+  return `${Math.round(year)} CE`;
+}
 
 interface RegionInfo {
   placeName: string;
@@ -41,27 +51,46 @@ export default function RegionInfoCard({
     setLoading(true);
     setError(null);
 
-    aiFetch('/api/region', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat, lng, year, regionName }),
-    })
-      .then(async r => {
-        const data = await r.json();
-        if (!r.ok) {
-          setError(data?.error || `Server returned ${r.status}`);
-        } else if (data?.placeName && data?.summary) {
-          setInfo(data as RegionInfo);
-        } else {
-          setError('The guide returned an unexpected response');
+    const yearLabel = formatYearForPrompt(year);
+    const locationHint = regionName
+      ? `${regionName} (roughly ${lat.toFixed(1)}°, ${lng.toFixed(1)}°)`
+      : `the region at ${lat.toFixed(1)}°, ${lng.toFixed(1)}°`;
+
+    const system = `You are a historian. Given a geographic location and a point in time, describe what was happening there. Respond in JSON only, no prose outside the JSON.
+
+Schema:
+{
+  "placeName": "Concrete name of the place/civilization at that time (e.g. 'Song Dynasty China', 'Roman Britannia', 'Pre-Columbian Cahokia')",
+  "summary": "2-4 sentence vivid description of life, politics, culture, or notable events in this place at this time. Use **bold** for 1-2 key phrases.",
+  "highlights": ["3-5 short bullet facts"],
+  "era": "Short era label, e.g. 'High Middle Ages' or 'Late Cretaceous'"
+}
+
+Rules:
+- Be accurate and specific. If the year predates humans/civilization in that region, describe the geological, biological, or cosmic state instead.
+- If the year is before Earth formed, describe the cosmic context.
+- Never invent people or events.
+- Keep summary under 450 characters.
+- Use web search for corroboration when available.`;
+
+    callAI(
+      system,
+      [{ role: 'user', content: `What was happening in ${locationHint} around ${yearLabel}?` }],
+      { maxTokens: 800, webSearch: true },
+    )
+      .then(({ text }) => {
+        const jsonMatch = text.trim().match(/\{[\s\S]*\}/);
+        if (!jsonMatch) { setError('The guide returned an unexpected response'); return; }
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed?.placeName && parsed?.summary) setInfo(parsed as RegionInfo);
+          else setError('The guide returned an unexpected response');
+        } catch {
+          setError('Failed to parse AI response');
         }
       })
-      .catch(e => {
-        setError(e.message || 'Network error');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .catch(e => setError(e.message || 'Network error'))
+      .finally(() => setLoading(false));
   };
 
   const yearLabel = formatYear(year);

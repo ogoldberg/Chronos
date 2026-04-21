@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { recordQuizAnswer, getStats } from './gamification';
 import { addReviewCard } from './spacedRepetition';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { QUIZ_SYSTEM } from '../../ai/prompts';
 
 interface QuizQuestion {
   question: string;
@@ -49,21 +50,24 @@ export default function QuizPanel({ recentEvents = [], era = 'modern', onClose }
     stopTimer();
 
     try {
-      const resp = await aiFetch('/api/quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ events: recentEvents.slice(0, 10), era }),
-      });
-
-      if (resp.status === 429) {
-        setError('Too many requests — wait a moment and try again.');
-        setLoading(false);
-        return;
+      const system = QUIZ_SYSTEM(recentEvents.slice(0, 10), era);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Generate a history quiz question about ${era} era events.` }],
+        { maxTokens: 800 },
+      );
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      let data: QuizQuestion | null = null;
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.question && Array.isArray(parsed.options) && parsed.options.length === 4 && typeof parsed.correctIndex === 'number') {
+            data = parsed;
+          }
+        } catch { /* fall through */ }
       }
-
-      const data = await resp.json();
-      if (data.error) {
-        setError(data.error);
+      if (!data) {
+        setError('Failed to generate quiz question. Try again.');
         setLoading(false);
         return;
       }

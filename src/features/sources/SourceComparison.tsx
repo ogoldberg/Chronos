@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { SOURCE_COMPARISON_SYSTEM } from '../../ai/prompts';
 
 interface Perspective {
   tradition: string;
@@ -51,27 +52,28 @@ export default function SourceComparison({ onClose, onNavigate }: Props) {
     setHasSearched(true);
 
     try {
-      const resp = await aiFetch('/api/sources/compare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: q }),
-      });
-
-      if (resp.status === 429) {
-        setError('Too many requests. Please wait a moment and try again.');
-        setLoading(false);
-        return;
+      const system = SOURCE_COMPARISON_SYSTEM(q);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Compare different historical perspectives on: "${q}"` }],
+        { maxTokens: 4000, webSearch: true },
+      );
+      let data: { perspectives?: unknown[]; consensus?: string } | null = null;
+      const objMatch = text.match(/\{[\s\S]*"perspectives"\s*:\s*\[[\s\S]*\][\s\S]*"consensus"\s*:[\s\S]*\}/);
+      if (objMatch) {
+        try { data = JSON.parse(objMatch[0]); } catch { /* try fallback */ }
       }
-
-      if (!resp.ok) {
-        setError('Failed to generate comparison. Try again.');
-        setLoading(false);
-        return;
+      if (!data?.perspectives?.length) {
+        const fallback = text.match(/\{[\s\S]*\}/);
+        if (fallback) {
+          try {
+            const parsed = JSON.parse(fallback[0]);
+            if (parsed.perspectives?.length) data = parsed;
+          } catch { /* give up */ }
+        }
       }
-
-      const data = await resp.json();
-      if (data.perspectives?.length) {
-        setResult(data);
+      if (data?.perspectives?.length) {
+        setResult(data as typeof result);
       } else {
         setError('Could not generate perspectives. Try a different topic.');
       }

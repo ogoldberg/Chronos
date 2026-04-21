@@ -17,9 +17,7 @@
 import { z } from 'zod';
 import { getPool } from '../../db';
 import { getAuth } from '../../auth';
-import { getProviderForRequest } from '../../providers/index';
-import { CURRICULUM_SYSTEM } from '../../../src/ai/prompts';
-import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
+import { getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
 
@@ -41,10 +39,6 @@ const curriculumUpdateSchema = z.object({
   description: z.string().optional().default(''),
   units: z.array(z.any()).optional().default([]),
   isPublic: z.boolean().optional().default(false),
-});
-
-const curriculumGenerateSchema = z.object({
-  topic: z.string().min(1, 'topic is required'),
 });
 
 const classroomCreateSchema = z.object({
@@ -185,34 +179,8 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
     return { status: 200, data: { ok: true } };
   });
 
-  // ── POST /api/curriculum/generate — AI generates curriculum ──
-  handleRoute('POST', '/api/curriculum/generate', null, async (body, _url, reqHeaders) => {
-    if (!checkRateLimit('curriculum-generate', getClientIP(reqHeaders || {}))) {
-      return { status: 429, data: { error: 'Rate limit exceeded. Try again in a minute.' } };
-    }
-    const parsedGen = validate(curriculumGenerateSchema, body);
-    if (!parsedGen.success) return { status: 400, data: { error: parsedGen.error } };
-    const { topic } = parsedGen.data;
-
-    // Extract grade level hint from topic
-    const gradeLevelMatch = topic.match(/(\d+)(?:th|st|nd|rd)\s*grade/i);
-    const gradeLevel = gradeLevelMatch ? `${gradeLevelMatch[1]}th Grade` : '8th Grade';
-
-    const ai = getProviderForRequest(reqHeaders);
-    const system = CURRICULUM_SYSTEM(topic, gradeLevel);
-    const resp = await ai.chat(system, [
-      { role: 'user', content: `Generate a comprehensive curriculum about: ${topic}` },
-    ], { maxTokens: 3000 });
-
-    const jsonMatch = resp.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return { status: 200, data: { curriculum: parsed } };
-      } catch { /* fall through */ }
-    }
-    return { status: 500, data: { error: 'Failed to generate curriculum. Try again.' } };
-  });
+  // /api/curriculum/generate moved to the client — direct browser-to-provider
+  // call from TeacherDashboard so curricula never touch our server.
 
   // ── POST /api/classroom — create classroom ──
   handleRoute('POST', '/api/classroom', null, async (body, _url, reqHeaders) => {

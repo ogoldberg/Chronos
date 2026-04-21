@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { TimelineEvent, EventConnection } from '../../types';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
 
 interface Props {
   onNavigate: (year: number, span: number) => void;
@@ -471,19 +471,9 @@ function ConnectionGraph({ onNavigate, onClose, events }: Props) {
     if (!node) return;
     setExpandLoading(true);
     try {
-      const resp = await aiFetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{
-            role: 'user',
-            content: `List 3-5 historical events directly connected to "${node.title}" (${node.year}). For each, state the connection type (caused, influenced, or related) and a brief description. Return as JSON array: [{"title":"...","year":1234,"emoji":"...","type":"caused|influenced|related","label":"short label","description":"..."}]`,
-          }],
-        }),
-      });
-      if (!resp.ok) throw new Error('Failed to expand');
-      const data = await resp.json();
-      const text = data.content || '';
+      const system = 'You are a concise historian. Return only valid JSON, no commentary.';
+      const userMsg = `List 3-5 historical events directly connected to "${node.title}" (${node.year}). For each, state the connection type (caused, influenced, or related) and a brief description. Return as JSON array: [{"title":"...","year":1234,"emoji":"...","type":"caused|influenced|related","label":"short label","description":"..."}]`;
+      const { text } = await callAI(system, [{ role: 'user', content: userMsg }], { maxTokens: 1500 });
       const jsonMatch = text.match(/\[[\s\S]*?\]/);
       if (jsonMatch) {
         const newEvents: any[] = JSON.parse(jsonMatch[0]);

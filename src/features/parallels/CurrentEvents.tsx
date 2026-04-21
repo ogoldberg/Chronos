@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { TimelineEvent } from '../../types';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { PARALLELS_SYSTEM } from '../../ai/prompts';
 
 interface ParallelEvent {
   title: string;
@@ -45,17 +46,29 @@ function CurrentEvents({ onClose, onNavigate, onAddEvents }: Props) {
     setResults([]);
 
     try {
-      const resp = await aiFetch('/api/parallels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
-      });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.error || 'Request failed');
+      const system = PARALLELS_SYSTEM(q);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Find historical parallels for: "${q}"` }],
+        { maxTokens: 3000, webSearch: true },
+      );
+      let events: ParallelEvent[] = [];
+      const objMatch = text.match(/\{[\s\S]*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
+      if (objMatch) {
+        try {
+          const parsed = JSON.parse(objMatch[0]);
+          if (Array.isArray(parsed.events)) events = parsed.events;
+        } catch { /* try array form */ }
       }
-      const data = await resp.json();
-      const events: ParallelEvent[] = data.events || [];
+      if (events.length === 0) {
+        const arrMatch = text.match(/\[[\s\S]*\]/);
+        if (arrMatch) {
+          try {
+            const parsed = JSON.parse(arrMatch[0]);
+            if (Array.isArray(parsed)) events = parsed;
+          } catch { /* give up */ }
+        }
+      }
       setResults(events);
 
       // Add events to the timeline

@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { callAI } from '../../ai/callAI';
+import { CURRICULUM_SYSTEM } from '../../ai/prompts';
 
 /* ────────────────────────────────── Types ─────────────────────────────── */
 
@@ -245,22 +247,22 @@ export default function TeacherDashboard({ onClose }: Props) {
     setAiGenerating(true);
     setError('');
     try {
-      const res = await fetch('/api/curriculum/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: aiTopic }),
-      });
-      if (!res.ok) throw new Error('AI generation failed');
-      const data = await res.json();
-      const generated: Curriculum = {
-        ...emptyCurriculum(),
-        ...data.curriculum,
-        id: makeId(),
-      };
+      const gradeLevelMatch = aiTopic.match(/(\d+)(?:th|st|nd|rd)\s*grade/i);
+      const gradeLevel = gradeLevelMatch ? `${gradeLevelMatch[1]}th Grade` : '8th Grade';
+      const system = CURRICULUM_SYSTEM(aiTopic, gradeLevel);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Generate a comprehensive curriculum about: ${aiTopic}` }],
+        { maxTokens: 3000 },
+      );
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('AI did not return valid JSON');
+      const parsed = JSON.parse(jsonMatch[0]);
+      const generated: Curriculum = { ...emptyCurriculum(), ...parsed, id: makeId() };
       setEditing(generated);
       setAiTopic('');
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message || 'AI generation failed');
     } finally {
       setAiGenerating(false);
     }

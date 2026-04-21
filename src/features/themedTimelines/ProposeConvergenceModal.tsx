@@ -2,7 +2,59 @@ import { useEffect, useRef, useState } from 'react';
 import { useTimelineStore, type ProposedThread } from '../../stores/timelineStore';
 import { getVisibleRange } from '../../canvas/viewport';
 import type { TimelineEvent, Viewport } from '../../types';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+
+/**
+ * System prompt for the propose-convergence flow. Inlined here instead of
+ * sharing with server code because this feature's prompt is bespoke and
+ * not reused elsewhere.
+ */
+function buildThreadsSystem(visibleTitles: string[], startYear?: number, endYear?: number): string {
+  const windowLine = startYear != null && endYear != null
+    ? `Current viewport: ${startYear} to ${endYear}.`
+    : '';
+  const catalog = visibleTitles.length > 0
+    ? `Events currently visible on the user's timeline (prefer referencing these by exact title):\n${visibleTitles.slice(0, 60).map(t => `- ${t}`).join('\n')}`
+    : 'No event catalog provided — reference well-known historical events by their commonly-used name.';
+
+  return `You are a rigorous historian helping a user extend an interactive timeline. The user will propose a connection between historical events or themes — sometimes lucid, sometimes speculative, sometimes wrong.
+
+Your job is to:
+1. Judge whether the proposed connection is historically valid.
+2. Break it into one or more concrete, directed threads between specific historical events.
+3. For each valid thread, return the source event, target event, the relationship type, a short visual label, and a 1-2 sentence rationale the user can read.
+4. Ignore claims that are pseudohistorical, anachronistic, or unsupportable.
+
+${windowLine}
+
+${catalog}
+
+Return ONLY a JSON object with this exact shape (no prose, no markdown fences):
+{
+  "summary": "One sentence about your overall judgment of the user's hypothesis.",
+  "threads": [
+    {
+      "fromTitle": "Exact event title (prefer from the visible list)",
+      "toTitle": "Exact event title",
+      "fromYear": 1439,
+      "toYear": 1517,
+      "relationship": "caused" | "influenced" | "preceded" | "enabled" | "responded_to" | "related",
+      "label": "short verb phrase, 1-4 words",
+      "explanation": "1-2 sentence historical rationale.",
+      "confidence": "high" | "medium" | "low",
+      "valid": true
+    }
+  ]
+}
+
+Rules:
+- If the user's hypothesis is invalid, return "threads": [] and explain why in "summary".
+- Never invent fake events. If the user references something real but you don't recognize the exact spelling, use the canonical title.
+- "valid": false entries ARE allowed if you want to flag a single leg of a multi-step claim that doesn't hold up — the client will show them to the user as rejected.
+- Prefer high-confidence threads backed by mainstream historical consensus. Mark speculative-but-defensible claims as "medium", and genuinely fringe connections as "low".
+- Keep "label" tight — it's painted on an arc in the UI: e.g. "enabled", "sparked", "echoed", "answered".
+- Return at most 6 threads.`;
+}
 
 /**
  * Conversational modal for proposing a convergence the system didn't
@@ -71,18 +123,16 @@ export default function ProposeConvergenceModal({ onClose, viewport, visibleEven
     try {
       const [startYear, endYear] = getVisibleRange(viewport);
       const titles = visibleEvents.slice(0, 80).map(e => e.title);
-      const resp = await aiFetch('/api/threads/propose', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hypothesis: h,
-          visibleEventTitles: titles,
-          startYear: Math.round(startYear),
-          endYear: Math.round(endYear),
-        }),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = (await resp.json()) as ServerResponse;
+      const system = buildThreadsSystem(titles, Math.round(startYear), Math.round(endYear));
+      const { text } = await callAI(system, [{ role: 'user', content: h }], { maxTokens: 2000, webSearch: true });
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      let data: ServerResponse = { summary: "I couldn't formalize that into threads.", threads: [] };
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed && typeof parsed === 'object') data = parsed as ServerResponse;
+        } catch { /* fall back to default */ }
+      }
       setResponse(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');

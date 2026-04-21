@@ -1,4 +1,3 @@
-import { aiFetch } from '../../services/aiRequest';
 /**
  * "History of This Place" — geolocation-aware history
  *
@@ -7,6 +6,7 @@ import { aiFetch } from '../../services/aiRequest';
  */
 
 import { useState } from 'react';
+import { callAI } from '../../ai/callAI';
 import { formatYear } from '../../utils/format';
 
 interface NearbyEvent {
@@ -34,13 +34,31 @@ export default function HistoryOfPlace({ onNavigate, onClose }: Props) {
     setLoading(true);
     setError('');
     try {
-      const resp = await aiFetch('/api/nearby', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat, lng, radius: 50 }),
-      });
-      const data = await resp.json();
-      setEvents(data.events || []);
+      const radius = 50;
+      const system = `You are a historian. Given geographic coordinates, list 6-8 significant historical events that occurred near that location (within ${radius}km). Include events from different eras.
+
+Return ONLY a JSON array:
+[{"title":"Event","year":1234,"emoji":"\u{1F3AF}","description":"One sentence.","distance":12.5,"wiki":"Wikipedia_Title"}]
+
+Rules:
+- Events must be REAL and verifiable
+- Include distance estimate in km from the given coordinates
+- Spread across different time periods
+- Use web search to verify`;
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Find historical events near latitude ${lat}, longitude ${lng} (within ${radius}km radius).` }],
+        { maxTokens: 1500, webSearch: true },
+      );
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      let parsed: NearbyEvent[] = [];
+      if (jsonMatch) {
+        try {
+          const j = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(j)) parsed = j;
+        } catch { /* ignore */ }
+      }
+      setEvents(parsed);
     } catch {
       setError('Failed to load nearby events');
     } finally {

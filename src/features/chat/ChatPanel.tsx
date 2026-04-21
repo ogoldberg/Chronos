@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { aiFetch } from '../../services/aiRequest';
+import { streamAI } from '../../ai/callAI';
+import { CHAT_SYSTEM } from '../../ai/prompts';
 
 /**
  * Strip Anthropic web_search citation markers (<cite index="...">...</cite>)
@@ -212,75 +213,37 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
     try {
       const history = messages.slice(-12).map(m => ({ role: m.role, content: m.content }));
 
-      // Stream the response token by token
+      // Direct client-to-provider streaming — the user's key and all the
+      // message content stay out of our server entirely.
       let content = '';
+      // Add empty assistant message that we'll stream into
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
-      const resp = await aiFetch('/api/chat/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...history, { role: 'user', content: text }],
-          context: buildContext(),
-        }),
-      });
-
-      if (!resp.ok || !resp.body) {
-        // Fallback to non-streaming
-        const fallback = await aiFetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [...history, { role: 'user', content: text }],
-            context: buildContext(),
-          }),
-        });
-        const data = await fallback.json();
-        content = data.content || "Sorry, I had trouble connecting. Try again?";
-      } else {
-        // Add empty assistant message that we'll stream into
-        setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.token) {
-                content += data.token;
-                // Update the streaming message in place — but strip control
-                // tags from the VISIBLE content so the user never sees raw
-                // [[GOTO:...]] / [[EVENTS:...]] / [[TOUR:...]] markup as it
-                // streams in. Post-processing still runs after the stream
-                // completes to actually act on those commands.
-                const visible = stripControlTags(content);
-                setMessages(prev => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = { role: 'assistant', content: visible };
-                  return updated;
-                });
-              }
-              if (data.error) {
-                content = data.error;
-              }
-            } catch { /* skip */ }
-          }
-        }
-        // Keep streaming message — we'll update it in-place after processing tags
+      const wasStreaming = true;
+      try {
+        await streamAI(
+          CHAT_SYSTEM(buildContext()),
+          [...history, { role: 'user', content: text }],
+          (token) => {
+            content += token;
+            // Update the streaming message in place — but strip control
+            // tags from the VISIBLE content so the user never sees raw
+            // [[GOTO:...]] / [[EVENTS:...]] / [[TOUR:...]] markup as it
+            // streams in. Post-processing still runs after the stream
+            // completes to actually act on those commands.
+            const visible = stripControlTags(content);
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: 'assistant', content: visible };
+              return updated;
+            });
+          },
+          { maxTokens: 2000, webSearch: true },
+        );
+      } catch {
+        if (!content) content = "Sorry, I had trouble connecting. Try again?";
       }
-
       if (!content) content = "Sorry, I had trouble connecting. Try again?";
-      const wasStreaming = resp.ok && resp.body;
 
       // Extract GOTO commands
       const gotoMatches = [...content.matchAll(/\[\[GOTO:([-\d.e]+),([-\d.e]+)\]\]/g)];

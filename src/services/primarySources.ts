@@ -1,4 +1,6 @@
-import { aiFetch } from './aiRequest';
+import { callAI } from '../ai/callAI';
+import { PRIMARY_SOURCES_SYSTEM } from '../ai/prompts';
+
 /**
  * Primary source discovery — client side.
  *
@@ -41,42 +43,65 @@ export async function fetchPrimarySources(event: TimelineEvent): Promise<Primary
   }
 
   try {
-    const resp = await aiFetch('/api/sources/primary', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: event.title,
-        year: event.year,
-        description: event.description?.slice(0, 500),
-        sourceClass: cls,
-      }),
+    // Call the AI directly — no server in the path. The prompt does all
+    // the enforcement; we take what it returns, run the same runtime
+    // sanity checks the server used to run, and hand the result back.
+    const description = event.description?.slice(0, 500);
+    // Narrow the SourceClass to the three values PRIMARY_SOURCES_SYSTEM accepts.
+    // supportsPrimarySources() already filtered out the other cases above.
+    const narrowCls = cls as 'historical' | 'scientific' | 'cultural';
+    const system = PRIMARY_SOURCES_SYSTEM(event.title, event.year, description, narrowCls);
+    const userMessage = `Find primary sources for: ${event.title} (${event.year < 0 ? `${Math.abs(event.year)} BCE` : `${event.year} CE`})`;
+    const { text } = await callAI(system, [{ role: 'user', content: userMessage }], {
+      maxTokens: 2000,
+      webSearch: true,
     });
-    if (!resp.ok) {
+
+    const jsonMatch = text.match(/\{[\s\S]*"sources"\s*:\s*\[[\s\S]*\][\s\S]*\}/);
+    if (!jsonMatch) {
       cache.set(event.id, []);
       return [];
     }
-    const data: unknown = await resp.json();
-    const sources: unknown = (data as { sources?: unknown }).sources;
-    if (!Array.isArray(sources)) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch {
       cache.set(event.id, []);
       return [];
     }
-    // Runtime-narrow each element. The server already validated shape
-    // but we don't want to trust the boundary blindly — if anything is
-    // missing required fields, drop it.
+    const arr = (parsed as { sources?: unknown }).sources;
+    if (!Array.isArray(arr)) {
+      cache.set(event.id, []);
+      return [];
+    }
+
+    // Runtime-narrow each element, dedupe by URL, and drop entries that
+    // postdate the event (can't be a primary source for something that
+    // hadn't happened yet). Same checks the old server route ran — they
+    // belong in user space now.
+    const seen = new Set<string>();
     const narrowed: PrimarySource[] = [];
-    for (const s of sources) {
+    for (const s of arr) {
       if (!s || typeof s !== 'object') continue;
       const obj = s as Record<string, unknown>;
       if (typeof obj.title !== 'string' || typeof obj.url !== 'string') continue;
+      if (seen.has(obj.url)) continue;
+      // URL must parse as a real https URL (relative or malformed is hallucinated).
+      try {
+        const u = new URL(obj.url);
+        if (u.protocol !== 'https:' && u.protocol !== 'http:') continue;
+      } catch { continue; }
+      // Year sanity: primary source must predate OR equal the event year.
+      const sYear = typeof obj.year === 'number' ? obj.year : undefined;
+      if (sYear !== undefined && sYear > event.year) continue;
+      seen.add(obj.url);
       narrowed.push({
         title: obj.title,
         url: obj.url,
-        year: typeof obj.year === 'number' ? obj.year : undefined,
+        year: sYear,
         author: typeof obj.author === 'string' ? obj.author : undefined,
         type: typeof obj.type === 'string' ? (obj.type as PrimarySource['type']) : undefined,
         relevance: typeof obj.relevance === 'string' ? obj.relevance : undefined,
-        extractedTitle: typeof obj.extractedTitle === 'string' ? obj.extractedTitle : undefined,
       });
     }
     cache.set(event.id, narrowed);

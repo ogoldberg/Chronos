@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { FIGURE_CHAT_SYSTEM } from '../../ai/prompts';
 
 interface HistoricalFigure {
   id: string;
@@ -72,29 +73,14 @@ export default function FigureChat({ onNavigate, onClose }: Props) {
 
     try {
       const history = messages.slice(-12).map(m => ({ role: m.role, content: m.content }));
-
-      const resp = await aiFetch('/api/figures/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          figureName: selectedFigure.name,
-          messages: [...history, { role: 'user', content: text }],
-        }),
-      });
-
-      if (resp.status === 429) {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: 'Too many requests. Please wait a moment and try again.',
-        }]);
-        setLoading(false);
-        return;
-      }
-
-      const data = await resp.json();
-      const content = data.content || 'I am at a loss for words. Perhaps ask me something else?';
-
-      setMessages(prev => [...prev, { role: 'assistant', content }]);
+      const system = FIGURE_CHAT_SYSTEM(selectedFigure.name, selectedFigure.years, selectedFigure.bio);
+      const { text: content } = await callAI(
+        system,
+        [...history, { role: 'user', content: text }],
+        { maxTokens: 1500 },
+      );
+      const reply = content || 'I am at a loss for words. Perhaps ask me something else?';
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',

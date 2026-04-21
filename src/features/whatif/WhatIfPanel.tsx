@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { WHATIF_SYSTEM } from '../../ai/prompts';
 
 interface SpeculativeEvent {
   title: string;
@@ -41,27 +42,22 @@ export default function WhatIfPanel({ onClose, onNavigate }: Props) {
     setHasSearched(true);
 
     try {
-      const resp = await aiFetch('/api/whatif', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
-      });
-
-      if (resp.status === 429) {
-        setError('Too many requests. Please wait a moment and try again.');
-        setLoading(false);
-        return;
+      const system = WHATIF_SYSTEM(q);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Generate a speculative alternate history timeline for: "${q}"` }],
+        { maxTokens: 3000, webSearch: true },
+      );
+      const objMatch = text.match(/\{[\s\S]*"events"\s*:\s*\[[\s\S]*\]\s*\}/);
+      let events: SpeculativeEvent[] = [];
+      if (objMatch) {
+        try {
+          const parsed = JSON.parse(objMatch[0]);
+          if (Array.isArray(parsed.events)) events = parsed.events;
+        } catch { /* ignore */ }
       }
-
-      if (!resp.ok) {
-        setError('Failed to generate alternate history. Try again.');
-        setLoading(false);
-        return;
-      }
-
-      const data = await resp.json();
-      if (data.events?.length) {
-        setResults(data.events);
+      if (events.length > 0) {
+        setResults(events);
       } else {
         setError('Could not generate speculative events. Try a different question.');
       }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -156,19 +156,41 @@ function TodayInHistory({ onNavigate, onClose }: Props) {
 
     setLoadingDetail(key);
     try {
-      const resp = await aiFetch('/api/today/detail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          year: evt.year,
-          title: evt.title,
-          description: evt.description,
-          wikiTitle: evt.wikipedia?.title,
-        }),
-      });
-      if (!resp.ok) throw new Error('Failed to load detail');
-      const data = await resp.json();
-      setEventDetails(prev => ({ ...prev, [key]: data.detail }));
+      const prompt = `You are a historian providing an engaging, concise deep-dive on a historical event.
+
+Event: "${evt.title}" (${evt.year < 0 ? `${Math.abs(evt.year)} BCE` : evt.year})
+Context: ${evt.description}
+${evt.wikipedia?.title ? `Wikipedia article: ${evt.wikipedia.title}` : ''}
+
+Provide a response as JSON with these fields:
+{
+  "narrative": "2-3 sentence vivid narrative of what happened and why it mattered",
+  "significance": "One sentence on the lasting historical impact",
+  "connections": ["1-3 related events or consequences, each as a short string"],
+  "funFact": "One surprising or lesser-known detail about this event"
+}
+
+Return ONLY valid JSON, no other text.`;
+      const { text } = await callAI(
+        'You are a concise historian. Return only valid JSON.',
+        [{ role: 'user', content: prompt }],
+        { maxTokens: 500, webSearch: false },
+      );
+      const jsonMatch = text.trim().match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Failed to parse AI response');
+      const detail = JSON.parse(jsonMatch[0]);
+      // Strip <cite> and other HTML markup from AI output.
+      const stripCites = (s: string) =>
+        s.replace(/<cite[^>]*>.*?<\/cite>/g, '').replace(/<[^>]+>/g, '').trim();
+      if (detail.narrative) detail.narrative = stripCites(detail.narrative);
+      if (detail.significance) detail.significance = stripCites(detail.significance);
+      if (detail.funFact) detail.funFact = stripCites(detail.funFact);
+      if (Array.isArray(detail.connections)) {
+        detail.connections = detail.connections.map((c: string) =>
+          typeof c === 'string' ? stripCites(c) : c,
+        );
+      }
+      setEventDetails(prev => ({ ...prev, [key]: detail }));
     } catch {
       // Silently fail — the base content is still visible
     } finally {

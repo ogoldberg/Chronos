@@ -23,8 +23,8 @@ const STATIC_DIR = path.resolve(__dirname, '..', 'dist');
 async function main() {
   const app = express();
 
-  // AI providers are built per-request from user-supplied headers
-  // (see providers/index.ts). No warmup needed.
+  // AI runs entirely in the browser now (see src/ai/callAI.ts) — the
+  // server never sees user keys or messages. Just bring up auth + DB.
   initAuth();
 
   // Init DB (optional)
@@ -54,10 +54,10 @@ async function main() {
     res.json({ status: 'ok', uptime: Math.round(process.uptime()) });
   });
 
-  // Streaming chat endpoint
+  // Streaming chat endpoint — stub only, traffic now direct to provider.
   app.post('/api/chat/stream', async (req, res) => {
     try {
-      await handleStreamRequest(req.body || {}, res, req.headers as Record<string, string | string[] | undefined>);
+      await handleStreamRequest(req.body || {}, res);
     } catch (err: any) {
       console.error('[API] stream error:', err.message);
       if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });

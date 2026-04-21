@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import type { Viewport, TimelineEvent } from '../../types';
 import { formatYear, scaleLabel } from '../../utils/format';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { INSIGHTS_SYSTEM } from '../../ai/prompts';
 
 interface Props {
   viewport: Viewport;
@@ -31,24 +32,46 @@ export default function InsightsPanel({ viewport, visibleEvents }: Props) {
     lastFetchRef.current = key;
     setLoading(true);
     try {
-      const resp = await aiFetch('/api/insights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          centerYear: viewport.centerYear,
-          span: viewport.span,
-          visibleEvents: visibleEvents.slice(0, 10).map(e => e.title),
-        }),
-      });
-      const data = await resp.json();
-      if (data.insights?.length) setInsights(data.insights);
-      setSources(Array.isArray(data.sources) ? data.sources : []);
+      const titles = visibleEvents.slice(0, 10).map(e => e.title).join(', ') || 'none';
+      const userMsg = `Time period centered on year ${viewport.centerYear} (span: ${viewport.span} years). Visible events: ${titles}. Give me 3 fascinating facts about this era, and if any are concretely dateable historical events, include them in an "events" array alongside the facts.`;
+      const { text, sources: aiSources } = await callAI(
+        INSIGHTS_SYSTEM,
+        [{ role: 'user', content: userMsg }],
+        { maxTokens: 900, webSearch: true },
+      );
+      // Prompt returns {facts, events} — also accept a bare array as legacy shape.
+      let facts: string[] = [];
+      const objMatch = text.match(/\{[\s\S]*"facts"\s*:[\s\S]*\}/);
+      const arrMatch = text.match(/\[[\s\S]*\]/);
+      if (objMatch) {
+        try {
+          const parsed = JSON.parse(objMatch[0]);
+          if (Array.isArray(parsed.facts)) facts = parsed.facts;
+        } catch { /* try array form below */ }
+      }
+      if (facts.length === 0 && arrMatch) {
+        try {
+          const parsed = JSON.parse(arrMatch[0]);
+          if (Array.isArray(parsed)) facts = parsed;
+        } catch { /* give up */ }
+      }
+      const cleanFacts = facts
+        .map(s => typeof s === 'string' ? stripCitationTags(s) : String(s))
+        .filter(Boolean);
+      if (cleanFacts.length > 0) setInsights(cleanFacts);
+      setSources(aiSources ?? []);
     } catch {
-      // Silently fail
+      // Silently fail — AI errors (including missing-key) dispatch their own
+      // UI via the gentle-gate overlay, so we don't need to surface here.
     } finally {
       setLoading(false);
     }
   };
+
+  /** Strip Anthropic web_search <cite> markers that the AI sometimes emits. */
+  function stripCitationTags(s: string): string {
+    return s.replace(/<cite\s+index="[^"]*"\s*>/g, '').replace(/<\/cite>/g, '');
+  }
 
   const handleActivate = () => {
     setActive(true);

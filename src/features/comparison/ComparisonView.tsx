@@ -4,7 +4,8 @@ import { formatYear, formatYearShort } from '../../utils/format';
 import { isEventVisible } from '../../canvas/viewport';
 import { REGION_LANES, matchEventToRegion } from '../../data/regions';
 import { speak, stopSpeech } from '../../utils/speech';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { COMPARISON_NARRATE_SYSTEM } from '../../ai/prompts';
 
 interface Props {
   viewport: Viewport;
@@ -41,17 +42,20 @@ export default function ComparisonView({ viewport, events, onClose, onSelectEven
       .slice(0, 20);
 
     try {
-      const res = await aiFetch('/api/comparison-narrate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          regions: selectedRegions,
-          startYear,
-          endYear,
-          events: visibleEvents,
-        }),
-      });
+      const system = COMPARISON_NARRATE_SYSTEM(selectedRegions, startYear, endYear, visibleEvents);
+      const userMsg = `Generate a comparative narration for these regions: ${selectedRegions.join(', ')} during ${startYear} to ${endYear}. Visible events: ${visibleEvents.join('; ') || 'none'}.`;
+      const aiResp = await callAI(system, [{ role: 'user', content: userMsg }], { maxTokens: 1000, webSearch: true });
       if (requestId !== narrationRequestRef.current) return;
+      // Fabricate a Response-like shape so the downstream code (res.ok / res.json) keeps working.
+      const jsonMatch = aiResp.text.match(/\{[\s\S]*\}/);
+      let narration = aiResp.text;
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (typeof parsed.narration === 'string') narration = parsed.narration;
+        } catch { /* leave narration as raw text */ }
+      }
+      const res = { ok: true, async json() { return { narration }; } } as Response;
       if (!res.ok) { setNarration(''); setNarrationLoading(false); return; }
       const data = await res.json();
       const text = data.narration || '';

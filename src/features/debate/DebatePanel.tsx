@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { DEBATE_SYSTEM } from '../../ai/prompts';
 
 interface Citation {
   source: string;
@@ -50,27 +51,24 @@ export default function DebatePanel({ onClose, onNavigate }: Props) {
     setHasSearched(true);
 
     try {
-      const resp = await aiFetch('/api/debate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: q }),
-      });
-
-      if (resp.status === 429) {
-        setError('Too many requests. Please wait a moment and try again.');
-        setLoading(false);
-        return;
-      }
-
-      if (!resp.ok) {
-        setError('Failed to generate debate. Try again.');
-        setLoading(false);
-        return;
-      }
-
-      const data = await resp.json();
-      if (data.perspectiveA && data.perspectiveB) {
-        setResult(data);
+      const system = DEBATE_SYSTEM(q);
+      const { text } = await callAI(
+        system,
+        [{ role: 'user', content: `Generate a structured historical debate on: "${q}"` }],
+        { maxTokens: 4000, webSearch: true },
+      );
+      const m = text.match(/\{[\s\S]*"perspectiveA"\s*:\s*\{[\s\S]*"perspectiveB"\s*:\s*\{[\s\S]*\}/);
+      if (m) {
+        try {
+          const parsed = JSON.parse(m[0]);
+          if (parsed.perspectiveA && parsed.perspectiveB) {
+            setResult(parsed);
+          } else {
+            setError('Could not generate debate perspectives. Try a different topic.');
+          }
+        } catch {
+          setError('Could not parse debate response. Try a different topic.');
+        }
       } else {
         setError('Could not generate debate perspectives. Try a different topic.');
       }

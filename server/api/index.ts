@@ -5,37 +5,36 @@
  */
 
 import type { Plugin } from 'vite';
-import { MissingAPIKeyError } from '../providers/index';
 import { initDB } from '../db';
 import { initAuth, getAuth } from '../auth';
 import { toNodeHandler } from 'better-auth/node';
 
+// Only free (non-AI) endpoints are registered here. Every AI-calling
+// feature now issues the HTTPS request directly from the browser to the
+// user's chosen provider (see src/ai/callAI.ts). Routes like chat,
+// insights, parallels, myths, quiz, lens, whatif, debate, comparison,
+// today/detail, nearby, region, figures, reading, sources (AI
+// discovery + comparison), threads/propose, and curriculum/generate
+// were removed entirely when we moved to full BYOK.
 import { registerEventsRoutes } from './routes/events';
 import { registerDiscoverRoutes } from './routes/discover';
-import { registerChatRoutes, handleStreamRequest } from './routes/chat';
-import { registerInsightsRoutes } from './routes/insights';
-import { registerParallelsRoutes } from './routes/parallels';
-import { registerMythsRoutes } from './routes/myths';
-import { registerQuizRoutes } from './routes/quiz';
-import { registerLensRoutes } from './routes/lens';
-import { registerWhatifRoutes } from './routes/whatif';
-import { registerDebateRoutes } from './routes/debate';
 import { registerUserRoutes } from './routes/user';
 import { registerConfigRoutes } from './routes/config';
 import { registerCommunityRoutes } from './routes/community';
 import { registerCurriculumRoutes } from './routes/curriculum';
-import { registerComparisonRoutes } from './routes/comparison';
 import { registerModerationRoutes } from './routes/moderation';
 import { registerTodayRoutes } from './routes/today';
-import { registerNearbyRoutes } from './routes/nearby';
-import { registerRegionRoutes } from './routes/region';
 import { registerPublicApiRoutes } from './routes/publicApi';
-import { registerFiguresRoutes } from './routes/figures';
-import { registerReadingRoutes } from './routes/reading';
-import { registerSourcesRoutes } from './routes/sources';
-import { registerThreadsRoutes } from './routes/threads';
 
-export { handleStreamRequest };
+// Placeholder so other code importing this symbol from api/index still
+// type-checks. The streaming chat handler no longer exists server-side.
+export async function handleStreamRequest(_body: unknown, res: { writeHead: (s: number, h: Record<string, string>) => void; end: (data: string) => void }): Promise<void> {
+  res.writeHead(410, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    error: 'removed',
+    message: 'Streaming chat now happens directly in the browser. See /api/config for supported providers.',
+  }));
+}
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -77,31 +76,16 @@ const handleRoute: RouteHandler = (method, pattern, _schema, handler) => {
 // Helper: check if DB is ready (passed as closure to route modules)
 const isDbReady = () => dbReady;
 
-// Register all routes
+// Register all routes (only free/DB endpoints — AI lives in the browser).
 registerEventsRoutes(handleRoute, isDbReady);
 registerDiscoverRoutes(handleRoute, isDbReady);
-registerChatRoutes(handleRoute);
-registerInsightsRoutes(handleRoute, isDbReady);
-registerParallelsRoutes(handleRoute);
-registerMythsRoutes(handleRoute);
-registerQuizRoutes(handleRoute);
-registerLensRoutes(handleRoute, isDbReady);
-registerWhatifRoutes(handleRoute);
-registerDebateRoutes(handleRoute);
 registerUserRoutes(handleRoute, isDbReady);
 registerConfigRoutes(handleRoute);
 registerCommunityRoutes(handleRoute);
 registerCurriculumRoutes(handleRoute, isDbReady);
-registerComparisonRoutes(handleRoute);
 registerModerationRoutes(handleRoute, isDbReady);
 registerTodayRoutes(handleRoute);
-registerNearbyRoutes(handleRoute);
-registerRegionRoutes(handleRoute);
 registerPublicApiRoutes(handleRoute, isDbReady);
-registerFiguresRoutes(handleRoute);
-registerReadingRoutes(handleRoute);
-registerSourcesRoutes(handleRoute);
-registerThreadsRoutes(handleRoute);
 
 // ── Request dispatcher ───────────────────────────────────────────────
 
@@ -124,24 +108,7 @@ export async function handleApiRequest(
 ): Promise<ApiResult> {
   const route = matchRoute(method, url);
   if (!route) return { status: 404, data: { error: 'Not found' } };
-  try {
-    return await route.handler(body, url, reqHeaders);
-  } catch (err: unknown) {
-    // AI routes throw MissingAPIKeyError when the user hasn't supplied a
-    // key. Convert to a structured 401 so the client can prompt the user
-    // to open Settings instead of treating this as a generic error.
-    if (err instanceof MissingAPIKeyError) {
-      return {
-        status: 401,
-        data: {
-          error: 'missing_api_key',
-          provider: err.provider,
-          message: err.message,
-        },
-      };
-    }
-    throw err;
-  }
+  return route.handler(body, url, reqHeaders);
 }
 
 // ── Body parser (for Vite dev server) ────────────────────────────────
@@ -207,10 +174,12 @@ export function apiPlugin(): Plugin {
         if (!url.startsWith('/api/')) return next();
 
         try {
-          // Streaming chat endpoint
+          // Streaming chat endpoint is gone — clients now call the
+          // provider directly. Preserve a stub response for bookmarked
+          // URLs so they get a clear message instead of a crash.
           if (req.method === 'POST' && url === '/api/chat/stream') {
             const body = await parseBody(req);
-            await handleStreamRequest(body, res, req.headers as Record<string, string | string[] | undefined>);
+            await handleStreamRequest(body, res);
             return;
           }
 

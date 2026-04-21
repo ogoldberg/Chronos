@@ -1,4 +1,5 @@
-import { aiFetch } from '../../services/aiRequest';
+import { callAI } from '../../ai/callAI';
+import { LENS_DISCOVERY_SYSTEM } from '../../ai/prompts';
 /**
  * Custom Theme Discovery Hook
  *
@@ -101,7 +102,7 @@ export function useCustomThemeDiscovery({
             name: theme.label,
             description: theme.description || '',
             // Fall back to the label as a tag if the user didn't supply
-            // any — the backend requires >=1 tag to match.
+            // any — LENS_DISCOVERY_SYSTEM requires >=1 tag to match.
             tags: theme.tags.length > 0 ? theme.tags : [theme.label.toLowerCase()],
           },
           startYear,
@@ -109,16 +110,17 @@ export function useCustomThemeDiscovery({
           count: 8,
         };
 
-        aiFetch('/api/lens/discover', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        })
-          .then(async resp => {
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
-            const raw: unknown[] = Array.isArray(data?.events) ? data.events : [];
+        const system = LENS_DISCOVERY_SYSTEM(body.lens, body.startYear, body.endYear, body.count);
+        const userMsg = `Discover ${body.count} events between ${body.startYear} and ${body.endYear} through the "${body.lens.name}" lens. Focus on: ${body.lens.tags.slice(0, 15).join(', ')}.`;
+        callAI(system, [{ role: 'user', content: userMsg }], { maxTokens: 3000, webSearch: true, signal: controller.signal })
+          .then(({ text }) => {
+            const jsonMatch = text.match(/\[[\s\S]*\]/);
+            if (!jsonMatch) throw new Error('No JSON array found');
+            let raw: unknown[] = [];
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              raw = Array.isArray(parsed) ? parsed : [];
+            } catch { raw = []; }
             const fresh: TimelineEvent[] = raw
               .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
               .filter(e => typeof e.title === 'string' && typeof e.year === 'number')
