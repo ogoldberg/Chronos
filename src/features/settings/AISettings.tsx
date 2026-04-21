@@ -106,7 +106,7 @@ export default function AISettings({ onClose, reason }: Props) {
           <div>
             <div style={titleStyle}>AI Settings</div>
             <div style={subtitleStyle}>
-              Bring your own API key. AI features are off until you add one.
+              Bring your own API key — Chronos never stores or logs it.
             </div>
           </div>
           <button onClick={onClose} style={closeBtnStyle} aria-label="Close">
@@ -120,6 +120,26 @@ export default function AISettings({ onClose, reason }: Props) {
             {reason}
           </div>
         )}
+
+        {/* Privacy reassurance. The key only ever lives in the user's
+            browser; it's passed through our server as a header so we can
+            reach the AI provider on their behalf, but we don't cache,
+            log, or persist it anywhere. */}
+        <div style={privacyBannerStyle}>
+          <div style={{ fontWeight: 600, marginBottom: 4, color: '#a7f3d0' }}>
+            🔒 Your key stays yours
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.7)' }}>
+            Your API key lives only in this browser's localStorage. Each AI
+            request forwards it straight to your chosen provider — Chronos
+            never logs, stores, caches, or shares it. There's no database row
+            with your key anywhere on our side.
+          </div>
+          <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
+            Clear it any time with the "Clear key" button below. It's also removed
+            when you clear this browser's site data.
+          </div>
+        </div>
 
         <div style={sectionStyle}>
           <label style={labelStyle}>Provider</label>
@@ -241,10 +261,6 @@ export default function AISettings({ onClose, reason }: Props) {
                   </a>
                 </div>
               )}
-              <div style={{ ...mutedStyle, marginTop: 4 }}>
-                Stored only in your browser (localStorage). Never sent to our server
-                except as the header on each AI request.
-              </div>
             </div>
 
             <div style={sectionStyle}>
@@ -426,6 +442,16 @@ const reasonBannerStyle: React.CSSProperties = {
   color: '#ffcc70',
   fontSize: 12,
   marginBottom: 16,
+};
+
+const privacyBannerStyle: React.CSSProperties = {
+  background: 'rgba(34,197,94,0.06)',
+  border: '1px solid rgba(34,197,94,0.2)',
+  borderRadius: 8,
+  padding: '12px 14px',
+  fontSize: 12,
+  lineHeight: 1.5,
+  marginBottom: 18,
 };
 
 const actionRowStyle: React.CSSProperties = {
