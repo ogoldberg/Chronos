@@ -22,7 +22,7 @@ const cache = new Map<string, FactCheckResult>();
 export async function factCheckEvent(
   title: string,
   year: number,
-  description?: string,
+  _description?: string,
 ): Promise<FactCheckResult> {
   const key = `${title}:${year}`;
   if (cache.has(key)) return cache.get(key)!;

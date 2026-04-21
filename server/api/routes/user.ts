@@ -16,7 +16,7 @@ const progressSchema = z.object({
   xp: z.number().optional(),
   level: z.number().optional(),
   completedUnits: z.array(z.string()).optional(),
-  quizScores: z.record(z.number()).optional(),
+  quizScores: z.record(z.string(), z.number()).optional(),
   badges: z.array(z.string()).optional(),
 }).passthrough();
 

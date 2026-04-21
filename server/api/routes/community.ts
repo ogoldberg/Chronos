@@ -31,7 +31,7 @@ const shareTourSchema = z.object({
 
 const voteSchema = z.object({
   eventId: z.string().min(1, 'eventId is required'),
-  vote: z.union([z.literal(1), z.literal(-1)], { errorMap: () => ({ message: 'vote must be 1 or -1' }) }),
+  vote: z.union([z.literal(1), z.literal(-1)], { message: 'vote must be 1 or -1' }),
 });
 
 /* ------------------------------------------------------------------ */

@@ -12,7 +12,7 @@ import type { RouteHandler } from '../index';
 
 const chatSchema = z.object({
   messages: z.array(z.object({
-    role: z.string(),
+    role: z.enum(['user', 'assistant', 'system']),
     content: z.string().max(8000, 'Each message content must be under 8000 chars'),
   })).min(1).max(20, 'messages must be an array of 1-20 items'),
   context: z.string().optional(),

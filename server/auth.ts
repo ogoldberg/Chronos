@@ -8,7 +8,8 @@
 import { betterAuth } from 'better-auth';
 import pg from 'pg';
 
-let _auth: ReturnType<typeof betterAuth> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _auth: any = null;
 
 export function initAuth() {
   if (_auth) return _auth;

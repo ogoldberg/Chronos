@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Viewport, TimelineEvent } from '../../types';
 import { formatYear, formatYearShort } from '../../utils/format';
-import { yearToPixel, isEventVisible } from '../../canvas/viewport';
+import { isEventVisible } from '../../canvas/viewport';
 import { REGION_LANES, matchEventToRegion } from '../../data/regions';
-import { speak, stopSpeech, isSpeaking } from '../../utils/speech';
+import { speak, stopSpeech } from '../../utils/speech';
 
 interface Props {
   viewport: Viewport;
@@ -12,7 +12,7 @@ interface Props {
   onSelectEvent: (ev: TimelineEvent) => void;
 }
 
-export default function ComparisonView({ viewport, events, onClose, onSelectEvent }: Props) {
+export default function ComparisonView({ viewport, events, onClose, onSelectEvent: _onSelectEvent }: Props) {
   const [selectedRegions, setSelectedRegions] = useState<string[]>(['europe', 'eastasia']);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

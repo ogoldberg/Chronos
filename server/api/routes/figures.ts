@@ -27,7 +27,7 @@ const FIGURE_DATA: Record<string, { years: string; bio: string }> = {
 const figuresChatSchema = z.object({
   figureName: z.string().min(1).max(100),
   messages: z.array(z.object({
-    role: z.string(),
+    role: z.enum(['user', 'assistant', 'system']),
     content: z.string().max(4000),
   })).min(1).max(20),
 });

@@ -172,15 +172,6 @@ function ConnectionGraph({ onNavigate, onClose, events }: Props) {
     };
   }, []);
 
-  const worldToScreen = useCallback((wx: number, wy: number) => {
-    const cam = cameraRef.current;
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    return {
-      x: (wx - cam.x) * cam.zoom + canvas.width / 2,
-      y: (wy - cam.y) * cam.zoom + canvas.height / 2,
-    };
-  }, []);
 
   // Find node under cursor
   const hitTest = useCallback((sx: number, sy: number): GraphNode | null => {

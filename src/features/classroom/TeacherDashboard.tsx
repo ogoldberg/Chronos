@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 /* ────────────────────────────────── Types ─────────────────────────────── */
 
@@ -162,7 +162,7 @@ export default function TeacherDashboard({ onClose }: Props) {
   const [viewingClassroom, setViewingClassroom] = useState<Classroom | null>(null);
   const [eventSearch, setEventSearch] = useState('');
   const [eventResults, setEventResults] = useState<{ id: string; title: string; year: number }[]>([]);
-  const [searchingEvents, setSearchingEvents] = useState(false);
+  const [, setSearchingEvents] = useState(false);
 
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);

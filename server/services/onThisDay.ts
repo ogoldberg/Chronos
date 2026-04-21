@@ -84,7 +84,7 @@ async function fetchWikipediaOnThisDay(month: number, day: number): Promise<OnTh
   });
   if (!resp.ok) throw new Error(`Wikipedia API returned ${resp.status}`);
 
-  const data: WikiOnThisDayResponse = await resp.json();
+  const data = await resp.json() as WikiOnThisDayResponse;
   const results: OnThisDayEvent[] = [];
 
   // Process events (main historical events)
@@ -191,7 +191,7 @@ async function fetchWikidataEvents(month: number, day: number): Promise<OnThisDa
     });
     if (!resp.ok) return []; // Graceful fallback — Wikidata is supplementary
 
-    const data = await resp.json();
+    const data = await resp.json() as any;
     const results: OnThisDayEvent[] = [];
 
     for (const binding of data.results?.bindings ?? []) {
@@ -386,7 +386,7 @@ export async function getAllOnThisDayEvents(
   month: number,
   day: number,
 ): Promise<{ events: OnThisDayEvent[]; byTheme: Record<string, OnThisDayEvent[]> }> {
-  const { curated, total } = await getOnThisDayEvents(month, day, 999);
+  const { curated } = await getOnThisDayEvents(month, day, 999);
 
   const key = `${month}-${day}`;
   const cached = cache.get(key);

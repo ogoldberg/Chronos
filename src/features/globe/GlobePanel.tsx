@@ -1372,16 +1372,6 @@ export default function GlobePanel({
   );
 }
 
-const headerBtnStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: '#ffffff80',
-  cursor: 'pointer',
-  fontSize: 14,
-  padding: '2px 6px',
-  lineHeight: 1,
-};
-
 const editorialHeaderBtnStyle: React.CSSProperties = {
   background: 'transparent',
   border: '1px solid var(--hairline, rgba(255,255,255,0.12))',

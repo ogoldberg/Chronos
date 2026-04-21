@@ -35,8 +35,6 @@ interface CellState {
   events: TimelineEvent[];
 }
 
-const MAX_CACHE_ENTRIES = 500; // max cells in memory
-
 // In-memory cell state
 const cellStates = new Map<CellKey, CellState>();
 
@@ -80,25 +78,6 @@ function getTier(span: number) {
     if (span <= ZOOM_TIERS[i]!.maxSpan) return ZOOM_TIERS[i]!;
   }
   return ZOOM_TIERS[0]!;
-}
-
-function getActiveTiers(span: number) {
-  // Return the current tier plus one tier above for continuity
-  const tiers = [];
-  for (const tier of ZOOM_TIERS) {
-    if (span <= tier.maxSpan) {
-      tiers.push(tier);
-      break;
-    }
-    // Include broader tiers that have already been loaded
-    tiers.push(tier);
-  }
-  // Only include the most specific applicable tier and the one above it
-  const current = getTier(span);
-  const currentIdx = ZOOM_TIERS.indexOf(current);
-  const result = [current];
-  if (currentIdx > 0) result.unshift(ZOOM_TIERS[currentIdx - 1]);
-  return result;
 }
 
 function cellKey(tierId: string, cellIndex: number): CellKey {

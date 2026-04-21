@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { TourStop } from '../types';
-import { speak, stopSpeech } from '../utils/speech';
+import { stopSpeech } from '../utils/speech';
 
 interface TourState {
   stops: TourStop[] | null;

@@ -129,7 +129,7 @@ async function sparql(query: string): Promise<any[]> {
       console.warn(`[wikidata] SPARQL ${resp.status} ${resp.statusText}`);
       return [];
     }
-    const data = await resp.json();
+    const data = await resp.json() as { results?: { bindings?: any[] } };
     return data.results?.bindings ?? [];
   } catch (err: any) {
     if (err?.name === 'AbortError') {
@@ -220,7 +220,7 @@ export async function resolveQID(rawTitle: string): Promise<string | null> {
         signal: controller.signal,
       });
       if (resp.ok) {
-        const data = await resp.json();
+        const data = await resp.json() as { query?: { search?: Array<{ title?: string }> } };
         const canonicalTitle = data.query?.search?.[0]?.title;
         if (canonicalTitle && canonicalTitle !== wikipediaTitle) {
           qid = await lookup(sanitizeTitle(canonicalTitle));

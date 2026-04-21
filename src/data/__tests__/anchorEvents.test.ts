@@ -70,9 +70,10 @@ describe('anchorEvents', () => {
     for (const event of ANCHOR_EVENTS) {
       if (!event.connections) continue;
       for (const conn of event.connections) {
-        const targetExists = allIds.has(conn.targetId) || allTitles.has(conn.targetTitle || '');
         // Some connections may reference events not in anchors (discovered events)
-        // so we just check the connection has a type
+        // so we just check the connection has a type. allIds/allTitles are
+        // kept for future presence assertions.
+        void allIds; void allTitles;
         expect(conn.type).toBeTruthy();
       }
     }

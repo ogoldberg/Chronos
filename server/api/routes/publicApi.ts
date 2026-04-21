@@ -6,10 +6,8 @@
  * Rate limited to 60 req/min per key.
  */
 
-import { z } from 'zod';
 import { getEventsInRange, searchEvents, getNearbyEvents } from '../../db';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
-import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
 
 function checkApiKey(headers: Record<string, string | string[] | undefined>): boolean {
@@ -55,7 +53,7 @@ export function registerPublicApiRoutes(handleRoute: RouteHandler, isDbReady: ()
           wiki: e.wiki,
           lat: e.lat,
           lng: e.lng,
-          confidence: e.confidence,
+          confidence: (e as unknown as { confidence?: string }).confidence,
         })),
         total: events.length,
         limit,

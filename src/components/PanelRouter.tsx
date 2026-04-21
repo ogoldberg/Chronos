@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { useUIStore, type PanelId } from '../stores/uiStore';
+import { useUIStore } from '../stores/uiStore';
 import { useTimelineStore, getAllEvents } from '../stores/timelineStore';
 import { useTourStore } from '../stores/tourStore';
 import { scaleLabel } from '../utils/format';
@@ -128,7 +128,6 @@ export default function PanelRouter() {
         <SearchPanel
           onNavigate={animateTo}
           onSelectEvent={useTimelineStore.getState().setSelectedEvent}
-          onClose={closePanel}
         />
       )}
       {activePanel === 'whatif' && (

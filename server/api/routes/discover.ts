@@ -364,7 +364,7 @@ async function queryThemeEvents(
     });
     if (!resp.ok) return [];
 
-    const data = await resp.json();
+    const data = await resp.json() as any;
     const results: any[] = [];
     const seen = new Set<string>();
 
@@ -441,7 +441,7 @@ async function discoverFromWikipediaSearch(
     });
     if (!resp.ok) return [];
 
-    const data = await resp.json();
+    const data = await resp.json() as any;
     const results: any[] = [];
     const category = getCategory(startYear);
 

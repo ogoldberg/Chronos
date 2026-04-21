@@ -1,6 +1,6 @@
 import type { TimelineEvent, Viewport } from '../types';
 import { getEra, ERAS } from '../data/eras';
-import { formatYear, formatYearShort } from '../utils/format';
+import { formatYearShort } from '../utils/format';
 import { yearToPixel, isEventVisible, nowYear } from './viewport';
 import { REGION_LANES, matchEventToRegion } from '../data/regions';
 import {
@@ -55,7 +55,6 @@ export function renderTimeline(
    */
   proposedThreads?: ProposedThread[],
 ): HitTarget[] {
-  const dpr = window.devicePixelRatio || 1;
   const W = width;
   const H = height;
   const left = vp.centerYear - vp.span / 2;
@@ -846,7 +845,7 @@ function drawProposedThreads(
   ctx: CanvasRenderingContext2D,
   threads: ProposedThread[],
   byTitle: Map<string, { x: number; y: number }>,
-  vp: Viewport,
+  _vp: Viewport,
   W: number,
 ) {
   const AMBER = '#f6b73c';

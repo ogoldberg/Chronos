@@ -15,7 +15,7 @@ import {
 } from '../../services/realtimeClient';
 import { useCollaborationStore } from '../../stores/collaborationStore';
 import { useUIStore } from '../../stores/uiStore';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useTimelineStore, getAllEvents } from '../../stores/timelineStore';
 
 // ── Color assignment for users ──────────────────────────────────────
 
@@ -83,11 +83,10 @@ export default function CollaborationPanel() {
         }
       },
       onHighlight(data) {
-        // Highlight event in the timeline
-        const events = useTimelineStore.getState().dynamicEvents;
-        const anchors = useTimelineStore.getState().anchorEvents ?? [];
-        const all = [...anchors, ...events];
-        const ev = all.find(e => e.id === data.eventId);
+        // Highlight event in the timeline. Anchor events live as a module
+        // constant (not a store field), so pull them in directly.
+        const events = getAllEvents(useTimelineStore.getState());
+        const ev = events.find(e => e.id === data.eventId);
         if (ev) {
           useTimelineStore.getState().setSelectedEvent(ev);
         }

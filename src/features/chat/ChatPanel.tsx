@@ -18,7 +18,7 @@ function stripCitationTags(s: string): string {
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage, Viewport, TimelineEvent, TourStop } from '../../types';
 import { formatYear, formatYearShort, scaleLabel } from '../../utils/format';
-import { speak, stopSpeech, isSpeaking } from '../../utils/speech';
+import { speak, stopSpeech } from '../../utils/speech';
 import VoiceButton from '../../components/VoiceButton';
 
 interface Props {

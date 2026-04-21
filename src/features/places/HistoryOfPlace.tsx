@@ -5,7 +5,7 @@
  * then shows historical events near that location.
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { formatYear } from '../../utils/format';
 
 interface NearbyEvent {

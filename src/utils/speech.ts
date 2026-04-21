@@ -34,8 +34,6 @@ export function isSpeaking(): boolean {
 
 // ─── STT (Speech-to-Text) ───
 
-type SpeechRecognitionType = typeof window extends { webkitSpeechRecognition: infer T } ? T : any;
-
 export interface VoiceInputCallbacks {
   onTranscript: (text: string, isFinal: boolean) => void;
   onStateChange: (state: VoiceInputState) => void;

@@ -73,7 +73,7 @@ describe('uiStore', () => {
     });
 
     it('toggleLane adds and removes regions', () => {
-      const initial = useUIStore.getState().activeLanes.size;
+      void useUIStore.getState().activeLanes.size;
       useUIStore.getState().toggleLane('europe');
       expect(useUIStore.getState().activeLanes.has('europe')).toBe(false);
       useUIStore.getState().toggleLane('europe');

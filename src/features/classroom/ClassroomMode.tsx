@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { TourStop, Viewport } from '../../types';
 import { formatYear } from '../../utils/format';
 import { speak, stopSpeech } from '../../utils/speech';
@@ -52,7 +52,7 @@ const PRESET_TOURS: { name: string; emoji: string; stops: TourStop[] }[] = [
   },
 ];
 
-export default function ClassroomMode({ viewport, onNavigate, onClose }: Props) {
+export default function ClassroomMode({ viewport: _viewport, onNavigate, onClose }: Props) {
   const [selectedTour, setSelectedTour] = useState<number | null>(null);
   const [currentStop, setCurrentStop] = useState(0);
   const [playing, setPlaying] = useState(false);

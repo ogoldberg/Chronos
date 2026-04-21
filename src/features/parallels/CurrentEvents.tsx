@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { TimelineEvent } from '../../types';
 
 interface ParallelEvent {
   title: string;
@@ -16,7 +17,7 @@ interface ParallelEvent {
 interface Props {
   onClose: () => void;
   onNavigate: (year: number, span: number) => void;
-  onAddEvents: (events: ParallelEvent[]) => void;
+  onAddEvents: (events: TimelineEvent[]) => void;
 }
 
 const SUGGESTION_CHIPS = [
@@ -58,7 +59,7 @@ function CurrentEvents({ onClose, onNavigate, onAddEvents }: Props) {
 
       // Add events to the timeline
       if (events.length > 0) {
-        const timelineEvents = events
+        const timelineEvents: TimelineEvent[] = events
           .filter((e) => e.title && e.year != null)
           .map((e, i) => ({
             id: `parallel-${Date.now()}-${i}`,
@@ -72,7 +73,7 @@ function CurrentEvents({ onClose, onNavigate, onAddEvents }: Props) {
             wiki: e.wiki,
             lat: e.lat,
             lng: e.lng,
-            geoType: e.geoType,
+            geoType: e.geoType as TimelineEvent['geoType'],
           }));
         onAddEvents(timelineEvents);
       }

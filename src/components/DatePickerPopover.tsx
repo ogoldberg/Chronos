@@ -145,7 +145,7 @@ function pickSpanForYear(target: number): number {
  * the target year's distance from now. Selecting a preset uses that
  * preset's hand-picked span.
  */
-export default function DatePickerPopover({ viewport, onNavigate, onClose }: Props) {
+export default function DatePickerPopover({ viewport: _viewport, onNavigate, onClose }: Props) {
   const [query, setQuery] = useState('');
   const [parsed, setParsed] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);

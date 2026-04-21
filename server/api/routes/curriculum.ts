@@ -329,7 +329,7 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
   });
 
   // ── GET /api/classroom/progress — student progress for classroom ──
-  handleRoute('GET', '/api/classroom/progress', null, async (_body, url, reqHeaders) => {
+  handleRoute('GET', '/api/classroom/progress', null, async (_body, url) => {
     if (!dbReady()) return { status: 503, data: { error: 'Database not available' } };
     const params = new URL(url, 'http://localhost').searchParams;
     const id = params.get('id');

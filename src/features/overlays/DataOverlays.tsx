@@ -8,9 +8,6 @@ import {
   GDP_BY_CIVILIZATION,
   TRADE_ROUTE_VOLUMES,
   type DataPoint,
-  type RegionDataSeries,
-  type CivGDPSeries,
-  type TradeRouteSeries,
 } from '../../data/climateData';
 import { REGION_LANES } from '../../data/regions';
 import { useTimelineStore } from '../../stores/timelineStore';
@@ -71,7 +68,7 @@ function drawOverlay(
   left: number,
   right: number,
   width: number,
-  height: number,
+  _height: number,
   yOffset: number,
   chartHeight: number,
 ) {
