@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import { getOnThisDayEvents, getAllOnThisDayEvents } from '../../services/onThisDay';
@@ -56,7 +56,7 @@ export function registerTodayRoutes(handleRoute: RouteHandler) {
     if (!parsed.success) return { status: 400, data: { error: parsed.error } };
     const { year, title, description, wikiTitle } = parsed.data;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const prompt = `You are a historian providing an engaging, concise deep-dive on a historical event.
 
 Event: "${title}" (${year < 0 ? `${Math.abs(year)} BCE` : year})

@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
@@ -24,7 +24,7 @@ export function registerNearbyRoutes(handleRoute: RouteHandler) {
     if (!parsed.success) return { status: 400, data: { error: parsed.error } };
     const { lat, lng, radius } = parsed.data;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const resp = await ai.chat(
       `You are a historian. Given geographic coordinates, list 6-8 significant historical events that occurred near that location (within ${radius}km). Include events from different eras.
 

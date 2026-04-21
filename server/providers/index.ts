@@ -1,39 +1,31 @@
 /**
  * AI Provider Factory
  *
- * Reads AI_PROVIDER and AI_MODEL from env to determine which backend to use.
- * Defaults to Anthropic Claude if nothing is set.
+ * Every AI-using route must read the user's provider/model/key from the
+ * inbound request headers and build a per-request provider instance. We
+ * deliberately do NOT cache a server-wide singleton with an env-based key
+ * any more — if the app accidentally shipped with a key in env, a public
+ * deploy would hand out free AI credits to anyone who hits the endpoints.
  *
- * Environment variables:
- *   AI_PROVIDER=anthropic|openai|google|ollama
- *   AI_MODEL=claude-sonnet-4-20250514 (or gpt-4o, gemini-2.0-flash, llama3.1, etc.)
- *   AI_BASE_URL=https://... (optional, for proxies/Azure/Ollama)
- *   AI_MAX_TOKENS=2000
- *   AI_WEB_SEARCH=true|false
+ * Headers (case-insensitive, forwarded by the client helper `aiRequest`):
+ *   X-User-Provider  — "anthropic" | "openai" | "google" | "ollama"
+ *   X-User-Model     — provider-specific model id
+ *   X-User-API-Key   — the user's own key (required for all paid providers)
+ *   X-User-Base-Url  — optional override (for proxies, self-hosted, etc.)
  *
- * Provider-specific keys:
- *   ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_AI_API_KEY
+ * Ollama is an exception — it's a local-only backend with no API key; we
+ * still let it go through so power users can run fully local.
  */
 
 import type { AIProvider, AIProviderConfig } from './types';
+import { MissingAPIKeyError } from './types';
 import { AnthropicProvider } from './anthropic';
 import { OpenAIProvider } from './openai';
 import { GoogleProvider } from './google';
 import { OllamaProvider } from './ollama';
 
 export type { AIProvider, AIMessage, AIResponse, AIProviderConfig } from './types';
-
-let _provider: AIProvider | null = null;
-
-export function getProviderConfig(): AIProviderConfig {
-  return {
-    provider: process.env.AI_PROVIDER || 'anthropic',
-    model: process.env.AI_MODEL || getDefaultModel(process.env.AI_PROVIDER || 'anthropic'),
-    baseUrl: process.env.AI_BASE_URL,
-    maxTokens: parseInt(process.env.AI_MAX_TOKENS || '2000', 10),
-    webSearch: process.env.AI_WEB_SEARCH !== 'false',
-  };
-}
+export { MissingAPIKeyError } from './types';
 
 function getDefaultModel(provider: string): string {
   switch (provider) {
@@ -44,40 +36,54 @@ function getDefaultModel(provider: string): string {
   }
 }
 
-export function createProvider(config?: AIProviderConfig): AIProvider {
-  const cfg = config || getProviderConfig();
+const SUPPORTED_PROVIDERS = new Set(['anthropic', 'openai', 'google', 'ollama']);
 
-  switch (cfg.provider) {
-    case 'openai':
-      return new OpenAIProvider(cfg);
-    case 'google':
-      return new GoogleProvider(cfg);
-    case 'ollama':
-      return new OllamaProvider(cfg);
+function firstHeader(
+  headers: Record<string, string | string[] | undefined>,
+  name: string,
+): string | undefined {
+  const v = headers[name.toLowerCase()] ?? headers[name];
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+export function createProvider(config: AIProviderConfig): AIProvider {
+  switch (config.provider) {
+    case 'openai': return new OpenAIProvider(config);
+    case 'google': return new GoogleProvider(config);
+    case 'ollama': return new OllamaProvider(config);
     case 'anthropic':
     default:
-      return new AnthropicProvider(cfg);
+      return new AnthropicProvider(config);
   }
 }
 
 /**
- * Get the singleton provider instance.
- * Call this from route handlers.
+ * Build a provider using the user's headers from the current request.
+ * Throws `MissingAPIKeyError` when a key is required but missing so the
+ * caller can return a 401 with a structured body.
  */
-export function getProvider(): AIProvider {
-  if (!_provider) {
-    const config = getProviderConfig();
-    _provider = createProvider(config);
-    console.log(`[AI] Provider: ${_provider.name} | Model: ${config.model} | Web search: ${config.webSearch}`);
+export function getProviderForRequest(
+  headers: Record<string, string | string[] | undefined> | undefined,
+): AIProvider {
+  const h = headers ?? {};
+  const provider = (firstHeader(h, 'x-user-provider') || 'anthropic').toLowerCase();
+  if (!SUPPORTED_PROVIDERS.has(provider)) {
+    throw new Error(`Unsupported AI provider: ${provider}`);
   }
-  return _provider;
-}
 
-/**
- * Switch provider at runtime (e.g. from an admin API).
- */
-export function setProvider(config: AIProviderConfig): AIProvider {
-  _provider = createProvider(config);
-  console.log(`[AI] Switched to: ${_provider.name} | Model: ${config.model}`);
-  return _provider;
+  const model = firstHeader(h, 'x-user-model') || getDefaultModel(provider);
+  const apiKey = firstHeader(h, 'x-user-api-key') || undefined;
+  const baseUrl = firstHeader(h, 'x-user-base-url') || undefined;
+
+  return createProvider({
+    provider,
+    model,
+    apiKey,
+    baseUrl,
+    maxTokens: 2000,
+    // Web search defaults to enabled for Anthropic; other providers opt in
+    // themselves when they support it.
+    webSearch: provider === 'anthropic',
+  });
 }

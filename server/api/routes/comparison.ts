@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { COMPARISON_NARRATE_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
@@ -25,7 +25,7 @@ export function registerComparisonRoutes(handleRoute: RouteHandler) {
     if (!parsed.success) return { status: 400, data: { error: parsed.error } };
     const { regions, startYear, endYear, events } = parsed.data;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const systemPrompt = COMPARISON_NARRATE_SYSTEM(regions, startYear, endYear, events);
     const resp = await ai.chat(systemPrompt, [
       {

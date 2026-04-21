@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { QUIZ_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
@@ -23,7 +23,7 @@ export function registerQuizRoutes(handleRoute: RouteHandler) {
     if (!parsed.success) return { status: 400, data: { error: parsed.error } };
     const { events, era } = parsed.data;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
 
     const system = QUIZ_SYSTEM(events.slice(0, 10), era);
     const resp = await ai.chat(system, [

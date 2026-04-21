@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { DEBATE_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
@@ -25,7 +25,7 @@ export function registerDebateRoutes(handleRoute: RouteHandler) {
     }
 
     const { topic } = validation.data;
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const system = DEBATE_SYSTEM(topic.trim());
 
     const resp = await ai.chat(system, [

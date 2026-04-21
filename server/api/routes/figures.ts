@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { FIGURE_CHAT_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
@@ -47,7 +47,7 @@ export function registerFiguresRoutes(handleRoute: RouteHandler) {
       return { status: 400, data: { error: 'Unknown historical figure.' } };
     }
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const system = FIGURE_CHAT_SYSTEM(figureName, figureInfo.years, figureInfo.bio);
     const resp = await ai.chat(system, messages, { maxTokens: 1500 });
 

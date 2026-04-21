@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { INSIGHTS_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
@@ -62,7 +62,7 @@ export function registerInsightsRoutes(handleRoute: RouteHandler, dbReady: () =>
       }
     }
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const resp = await ai.chat(INSIGHTS_SYSTEM, [
       { role: 'user', content: `Time period centered on year ${centerYear} (span: ${span} years). Visible events: ${visibleEvents.join(', ') || 'none'}. Give me 3 fascinating facts about this era, and if any are concretely dateable historical events, include them in an "events" array alongside the facts.` },
     ], { maxTokens: 900, webSearch: true });

@@ -57,6 +57,22 @@ export interface AIChatOptions {
   model?: string;
 }
 
+/**
+ * Thrown when a route would call the AI provider but no user API key was
+ * supplied. The route dispatcher converts this to a 401 response with a
+ * structured body so the client can prompt the user to open Settings.
+ *
+ * We deliberately have no server-side fallback key. Every AI request must
+ * carry a user-owned key, which means costs and rate limits belong to the
+ * user rather than the app operator.
+ */
+export class MissingAPIKeyError extends Error {
+  readonly kind = 'missing_api_key';
+  constructor(public readonly provider: string) {
+    super(`No API key provided for ${provider}. Users must supply their own key via the Settings panel.`);
+  }
+}
+
 export interface AIProvider {
   readonly name: string;
 

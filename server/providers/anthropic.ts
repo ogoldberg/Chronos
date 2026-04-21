@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { MissingAPIKeyError } from './types';
 import type { AIProvider, AIMessage, AIResponse, AIProviderConfig, AIChatOptions, AISource } from './types';
 
 export class AnthropicProvider implements AIProvider {
@@ -9,8 +10,12 @@ export class AnthropicProvider implements AIProvider {
   private webSearch: boolean;
 
   constructor(config: AIProviderConfig) {
+    // No server-side fallback: users must bring their own key. This makes
+    // AI costs the user's responsibility and removes the surface area for
+    // an exploited or leaked app-wide key.
+    if (!config.apiKey) throw new MissingAPIKeyError('anthropic');
     this.client = new Anthropic({
-      apiKey: config.apiKey || process.env.ANTHROPIC_API_KEY,
+      apiKey: config.apiKey,
       ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
     });
     this.model = config.model || 'claude-sonnet-4-20250514';

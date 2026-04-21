@@ -20,7 +20,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
@@ -91,7 +91,7 @@ export function registerThreadsRoutes(handleRoute: RouteHandler) {
     if (!parsed.success) return { status: 400, data: { error: parsed.error } };
     const { hypothesis, visibleEventTitles, startYear, endYear } = parsed.data;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const system = systemPrompt(visibleEventTitles, startYear, endYear);
     const resp = await ai.chat(
       system,

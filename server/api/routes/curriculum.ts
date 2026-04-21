@@ -17,7 +17,7 @@
 import { z } from 'zod';
 import { getPool } from '../../db';
 import { getAuth } from '../../auth';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { CURRICULUM_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
@@ -198,7 +198,7 @@ export function registerCurriculumRoutes(handleRoute: RouteHandler, dbReady: () 
     const gradeLevelMatch = topic.match(/(\d+)(?:th|st|nd|rd)\s*grade/i);
     const gradeLevel = gradeLevelMatch ? `${gradeLevelMatch[1]}th Grade` : '8th Grade';
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const system = CURRICULUM_SYSTEM(topic, gradeLevel);
     const resp = await ai.chat(system, [
       { role: 'user', content: `Generate a comprehensive curriculum about: ${topic}` },

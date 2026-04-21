@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { SOURCE_COMPARISON_SYSTEM, PRIMARY_SOURCES_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
@@ -126,7 +126,7 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     }
 
     const { topic } = validation.data;
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const system = SOURCE_COMPARISON_SYSTEM(topic.trim());
 
     const resp = await ai.chat(system, [
@@ -199,7 +199,7 @@ export function registerSourcesRoutes(handleRoute: RouteHandler) {
     }
     metrics.aiCalls++;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const system = PRIMARY_SOURCES_SYSTEM(title, year, description, sourceClass);
 
     // The user message is just the identifying tuple. The system prompt

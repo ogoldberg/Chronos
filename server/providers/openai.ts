@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { MissingAPIKeyError } from './types';
 import type { AIProvider, AIMessage, AIResponse, AIProviderConfig, AIChatOptions } from './types';
 
 export class OpenAIProvider implements AIProvider {
@@ -9,8 +10,9 @@ export class OpenAIProvider implements AIProvider {
   private webSearch: boolean;
 
   constructor(config: AIProviderConfig) {
+    if (!config.apiKey) throw new MissingAPIKeyError('openai');
     this.client = new OpenAI({
-      apiKey: config.apiKey || process.env.OPENAI_API_KEY,
+      apiKey: config.apiKey,
       ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
     });
     this.model = config.model || 'gpt-4o';

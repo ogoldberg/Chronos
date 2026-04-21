@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { upsertEvents } from '../../db';
 import { LENS_DISCOVERY_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
@@ -30,7 +30,7 @@ export function registerLensRoutes(handleRoute: RouteHandler, dbReady: () => boo
     if (!parsed.success) return { status: 400, data: { error: parsed.error } };
     const { lens, startYear, endYear, count } = parsed.data;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const safeCount = count;
     const system = LENS_DISCOVERY_SYSTEM(lens, startYear, endYear, safeCount);
     const resp = await ai.chat(system, [

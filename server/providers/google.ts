@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { MissingAPIKeyError } from './types';
 import type { AIProvider, AIMessage, AIResponse, AIProviderConfig, AIChatOptions } from './types';
 
 export class GoogleProvider implements AIProvider {
@@ -8,8 +9,8 @@ export class GoogleProvider implements AIProvider {
   private maxTokens: number;
 
   constructor(config: AIProviderConfig) {
-    const apiKey = config.apiKey || process.env.GOOGLE_AI_API_KEY || '';
-    this.genAI = new GoogleGenerativeAI(apiKey);
+    if (!config.apiKey) throw new MissingAPIKeyError('google');
+    this.genAI = new GoogleGenerativeAI(config.apiKey);
     this.model = config.model || 'gemini-2.0-flash';
     this.maxTokens = config.maxTokens || 2000;
   }

@@ -14,7 +14,7 @@
 
 import { initDB, upsertEvents, getEventsInRange } from './db';
 import { getCacheRegion, markCacheRegion, logDiscovery } from './db';
-import { createProvider, getProviderConfig } from './providers/index';
+import { createProvider } from './providers/index';
 import { DISCOVER_SYSTEM } from './prompts';
 import { ANCHOR_EVENTS } from '../src/data/anchorEvents';
 
@@ -105,10 +105,27 @@ async function main() {
     console.log('[Seed] Anchor events upserted\n');
   }
 
-  // Init AI provider
-  const provider = createProvider();
-  const config = getProviderConfig();
-  console.log(`[AI] Provider: ${config.provider} | Model: ${config.model}\n`);
+  // Init AI provider. Seed is a dev-only CLI — it reads keys from env
+  // intentionally. The HTTP server never does this; every user request
+  // must carry its own key.
+  const providerName = process.env.AI_PROVIDER || 'anthropic';
+  const model = process.env.AI_MODEL
+    || (providerName === 'openai' ? 'gpt-4o'
+      : providerName === 'google' ? 'gemini-2.0-flash'
+      : providerName === 'ollama' ? 'llama3.1'
+      : 'claude-sonnet-4-20250514');
+  const apiKey = process.env.ANTHROPIC_API_KEY
+    || process.env.OPENAI_API_KEY
+    || process.env.GOOGLE_AI_API_KEY;
+  const provider = createProvider({
+    provider: providerName,
+    model,
+    apiKey,
+    baseUrl: process.env.AI_BASE_URL,
+    maxTokens: parseInt(process.env.AI_MAX_TOKENS || '2000', 10),
+    webSearch: process.env.AI_WEB_SEARCH !== 'false',
+  });
+  console.log(`[AI] Provider: ${providerName} | Model: ${model}\n`);
 
   const tiers = tierFilter ? TIERS.filter(t => t.id === tierFilter) : TIERS;
   let totalCells = 0;

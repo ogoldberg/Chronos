@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest } from '../../providers/index';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
 import type { RouteHandler } from '../index';
@@ -51,7 +51,7 @@ export function registerRegionRoutes(handleRoute: RouteHandler) {
       ? `${regionName} (roughly ${lat.toFixed(1)}°, ${lng.toFixed(1)}°)`
       : `the region at ${lat.toFixed(1)}°, ${lng.toFixed(1)}°`;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const resp = await ai.chat(
       `You are a historian. Given a geographic location and a point in time, describe what was happening there. Respond in JSON only, no prose outside the JSON.
 

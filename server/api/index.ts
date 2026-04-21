@@ -5,7 +5,7 @@
  */
 
 import type { Plugin } from 'vite';
-import { getProvider } from '../providers/index';
+import { MissingAPIKeyError } from '../providers/index';
 import { initDB } from '../db';
 import { initAuth, getAuth } from '../auth';
 import { toNodeHandler } from 'better-auth/node';
@@ -123,10 +123,25 @@ export async function handleApiRequest(
   reqHeaders?: Record<string, string | string[] | undefined>,
 ): Promise<ApiResult> {
   const route = matchRoute(method, url);
-  if (route) {
-    return route.handler(body, url, reqHeaders);
+  if (!route) return { status: 404, data: { error: 'Not found' } };
+  try {
+    return await route.handler(body, url, reqHeaders);
+  } catch (err: unknown) {
+    // AI routes throw MissingAPIKeyError when the user hasn't supplied a
+    // key. Convert to a structured 401 so the client can prompt the user
+    // to open Settings instead of treating this as a generic error.
+    if (err instanceof MissingAPIKeyError) {
+      return {
+        status: 401,
+        data: {
+          error: 'missing_api_key',
+          provider: err.provider,
+          message: err.message,
+        },
+      };
+    }
+    throw err;
   }
-  return { status: 404, data: { error: 'Not found' } };
 }
 
 // ── Body parser (for Vite dev server) ────────────────────────────────
@@ -162,8 +177,8 @@ export function apiPlugin(): Plugin {
   return {
     name: 'chronos-api',
     configureServer(server) {
-      // Init provider + auth
-      getProvider();
+      // AI providers are built per-request from user-supplied headers, so
+      // there's no singleton to warm up here any more. Just init auth + DB.
       initAuth();
 
       // Init DB

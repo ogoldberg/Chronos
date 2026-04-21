@@ -11,7 +11,6 @@ import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { handleApiRequest, handleStreamRequest, setDbReady } from './api';
-import { getProvider } from './providers/index';
 import { initDB } from './db';
 import { initAuth, getAuth } from './auth';
 import { toNodeHandler } from 'better-auth/node';
@@ -24,8 +23,8 @@ const STATIC_DIR = path.resolve(__dirname, '..', 'dist');
 async function main() {
   const app = express();
 
-  // Init AI provider + auth
-  getProvider();
+  // AI providers are built per-request from user-supplied headers
+  // (see providers/index.ts). No warmup needed.
   initAuth();
 
   // Init DB (optional)

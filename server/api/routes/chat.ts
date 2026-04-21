@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { getProvider } from '../../providers/index';
+import { getProviderForRequest, MissingAPIKeyError } from '../../providers/index';
 import { CHAT_SYSTEM } from '../../prompts';
 import { checkRateLimit, getClientIP } from '../middleware/rateLimit';
 import { validate } from '../middleware/validate';
@@ -27,7 +27,7 @@ export function registerChatRoutes(handleRoute: RouteHandler) {
     if (!parsed.success) return { status: 400, data: { error: parsed.error } };
     const { messages, context } = parsed.data;
 
-    const ai = getProvider();
+    const ai = getProviderForRequest(reqHeaders);
     const system = CHAT_SYSTEM(context);
     const resp = await ai.chat(system, messages, { maxTokens: 2000, webSearch: true });
     return { status: 200, data: { content: resp.text } };
@@ -41,7 +41,17 @@ export async function handleStreamRequest(body: any, res: any, reqHeaders: Recor
     res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
     return;
   }
-  const ai = getProvider();
+  let ai;
+  try {
+    ai = getProviderForRequest(reqHeaders);
+  } catch (err: unknown) {
+    if (err instanceof MissingAPIKeyError) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'missing_api_key', provider: err.provider, message: err.message }));
+      return;
+    }
+    throw err;
+  }
   const { messages, context } = body;
   const system = CHAT_SYSTEM(context);
 
