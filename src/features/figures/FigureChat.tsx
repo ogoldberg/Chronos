@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { aiFetch } from '../../services/aiRequest';
 
 interface HistoricalFigure {
   id: string;
@@ -72,7 +73,7 @@ export default function FigureChat({ onNavigate, onClose }: Props) {
     try {
       const history = messages.slice(-12).map(m => ({ role: m.role, content: m.content }));
 
-      const resp = await fetch('/api/figures/chat', {
+      const resp = await aiFetch('/api/figures/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

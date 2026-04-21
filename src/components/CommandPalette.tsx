@@ -31,6 +31,8 @@ interface Props {
   toggleGlobe: () => void;
   /** Open the date / period picker (so the user can also reach it via ⌘K). */
   openDatePicker: () => void;
+  /** Open the AI settings overlay (BYOK). */
+  openAISettings: () => void;
 }
 
 /**
@@ -56,6 +58,7 @@ export default function CommandPalette({
   openPanel,
   toggleGlobe,
   openDatePicker,
+  openAISettings,
 }: Props) {
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
@@ -65,8 +68,8 @@ export default function CommandPalette({
   const toggleThemedTimelines = useUIStore(s => s.toggleThemedTimelines);
 
   const commands = useMemo<Command[]>(
-    () => buildCommands({ openPanel, toggleGlobe, openDatePicker, toggleThemedTimelines }),
-    [openPanel, toggleGlobe, openDatePicker, toggleThemedTimelines],
+    () => buildCommands({ openPanel, toggleGlobe, openDatePicker, openAISettings, toggleThemedTimelines }),
+    [openPanel, toggleGlobe, openDatePicker, openAISettings, toggleThemedTimelines],
   );
 
   // Apply the query filter, preserving group order so the result list
@@ -418,11 +421,13 @@ function buildCommands({
   openPanel,
   toggleGlobe,
   openDatePicker,
+  openAISettings,
   toggleThemedTimelines,
 }: {
   openPanel: (panel: PanelId) => void;
   toggleGlobe: () => void;
   openDatePicker: () => void;
+  openAISettings: () => void;
   toggleThemedTimelines: () => void;
 }): Command[] {
   // Helper that returns a `run` function which opens a given panel.
@@ -648,6 +653,14 @@ function buildCommands({
     },
 
     // ── System ────────────────────────────────────────────
+    {
+      id: 'ai-settings',
+      label: 'AI settings',
+      hint: 'Add your API key for AI features',
+      group: 'system',
+      keywords: ['api', 'key', 'anthropic', 'openai', 'gemini', 'claude', 'gpt', 'byok', 'provider', 'model'],
+      run: openAISettings,
+    },
     {
       id: 'account',
       label: 'Account',

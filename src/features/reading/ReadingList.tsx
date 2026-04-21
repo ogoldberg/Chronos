@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { aiFetch } from '../../services/aiRequest';
 
 interface ReadingItem {
   title: string;
@@ -64,7 +65,7 @@ export default function ReadingList({ onClose, viewport }: Props) {
     setItems([]);
 
     try {
-      const resp = await fetch('/api/reading', {
+      const resp = await aiFetch('/api/reading', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic: t }),

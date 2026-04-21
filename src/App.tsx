@@ -25,6 +25,7 @@ import './App.css';
 
 const GlobePanel = lazy(() => import('./features/globe/GlobePanel'));
 const SourcesMetricsDashboard = lazy(() => import('./features/admin/SourcesMetricsDashboard'));
+const AISettings = lazy(() => import('./features/settings/AISettings'));
 
 /**
  * Watch the URL hash so admin surfaces can activate via e.g.
@@ -98,6 +99,11 @@ export default function App() {
   // Whether the ⌘K command palette is open. Triggered by ⌘K, the header
   // Search button, or the legacy '/' shortcut.
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // AI settings overlay. Opens when the user explicitly asks, or when any
+  // gated AI action fires AI_KEY_NEEDED_EVENT because the user hasn't
+  // configured a key yet.
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [aiSettingsReason, setAiSettingsReason] = useState<string | undefined>();
 
   // Visible events
   const visibleEvents = useMemo(
@@ -183,6 +189,19 @@ export default function App() {
     setSelectedEvent(ev);
     if (ev) recordEventView();
   }, [setSelectedEvent]);
+
+  // Listen for "AI key needed" events from the aiRequest helper. Any
+  // AI-hitting service that throws AIKeyMissingError also fires this
+  // event so the settings overlay can open itself without prop-drilling.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ reason?: string }>;
+      setAiSettingsReason(ce.detail?.reason);
+      setAiSettingsOpen(true);
+    };
+    window.addEventListener('chronos:ai-key-needed', handler);
+    return () => window.removeEventListener('chronos:ai-key-needed', handler);
+  }, []);
 
   const hash = useHash();
   if (hash === 'sources-metrics') {
@@ -315,7 +334,18 @@ export default function App() {
         openPanel={openPanel}
         toggleGlobe={toggleGlobe}
         openDatePicker={() => setDatePickerOpen(true)}
+        openAISettings={() => { setAiSettingsReason(undefined); setAiSettingsOpen(true); }}
       />
+
+      {/* AI Settings overlay — BYOK for all AI features */}
+      {aiSettingsOpen && (
+        <Suspense fallback={null}>
+          <AISettings
+            reason={aiSettingsReason}
+            onClose={() => { setAiSettingsOpen(false); setAiSettingsReason(undefined); }}
+          />
+        </Suspense>
+      )}
 
       {/* "Show me around" button — visible when help overlay is open */}
       {activePanel === 'help' && (

@@ -1,3 +1,4 @@
+import { aiFetch } from './aiRequest';
 /**
  * Primary source discovery — client side.
  *
@@ -40,7 +41,7 @@ export async function fetchPrimarySources(event: TimelineEvent): Promise<Primary
   }
 
   try {
-    const resp = await fetch('/api/sources/primary', {
+    const resp = await aiFetch('/api/sources/primary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

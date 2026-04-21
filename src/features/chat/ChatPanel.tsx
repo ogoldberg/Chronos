@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { aiFetch } from '../../services/aiRequest';
 
 /**
  * Strip Anthropic web_search citation markers (<cite index="...">...</cite>)
@@ -214,7 +215,7 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
       // Stream the response token by token
       let content = '';
 
-      const resp = await fetch('/api/chat/stream', {
+      const resp = await aiFetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -225,7 +226,7 @@ ${selectedEvent ? `- Currently selected: ${selectedEvent.title} (${formatYear(se
 
       if (!resp.ok || !resp.body) {
         // Fallback to non-streaming
-        const fallback = await fetch('/api/chat', {
+        const fallback = await aiFetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

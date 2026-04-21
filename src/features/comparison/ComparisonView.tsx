@@ -4,6 +4,7 @@ import { formatYear, formatYearShort } from '../../utils/format';
 import { isEventVisible } from '../../canvas/viewport';
 import { REGION_LANES, matchEventToRegion } from '../../data/regions';
 import { speak, stopSpeech } from '../../utils/speech';
+import { aiFetch } from '../../services/aiRequest';
 
 interface Props {
   viewport: Viewport;
@@ -40,7 +41,7 @@ export default function ComparisonView({ viewport, events, onClose, onSelectEven
       .slice(0, 20);
 
     try {
-      const res = await fetch('/api/comparison-narrate', {
+      const res = await aiFetch('/api/comparison-narrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

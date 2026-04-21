@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { aiFetch } from '../../services/aiRequest';
 
 interface Citation {
   source: string;
@@ -49,7 +50,7 @@ export default function DebatePanel({ onClose, onNavigate }: Props) {
     setHasSearched(true);
 
     try {
-      const resp = await fetch('/api/debate', {
+      const resp = await aiFetch('/api/debate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic: q }),

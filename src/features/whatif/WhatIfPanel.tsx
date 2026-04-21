@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { aiFetch } from '../../services/aiRequest';
 
 interface SpeculativeEvent {
   title: string;
@@ -40,7 +41,7 @@ export default function WhatIfPanel({ onClose, onNavigate }: Props) {
     setHasSearched(true);
 
     try {
-      const resp = await fetch('/api/whatif', {
+      const resp = await aiFetch('/api/whatif', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q }),

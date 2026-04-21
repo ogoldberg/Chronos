@@ -1,3 +1,4 @@
+import { aiFetch } from '../../services/aiRequest';
 /**
  * "History of This Place" — geolocation-aware history
  *
@@ -33,7 +34,7 @@ export default function HistoryOfPlace({ onNavigate, onClose }: Props) {
     setLoading(true);
     setError('');
     try {
-      const resp = await fetch('/api/nearby', {
+      const resp = await aiFetch('/api/nearby', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lat, lng, radius: 50 }),

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatYear } from '../../utils/format';
+import { aiFetch } from '../../services/aiRequest';
 
 interface RegionInfo {
   placeName: string;
@@ -40,7 +41,7 @@ export default function RegionInfoCard({
     setLoading(true);
     setError(null);
 
-    fetch('/api/region', {
+    aiFetch('/api/region', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat, lng, year, regionName }),

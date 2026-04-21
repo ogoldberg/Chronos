@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTimelineStore, type ProposedThread } from '../../stores/timelineStore';
 import { getVisibleRange } from '../../canvas/viewport';
 import type { TimelineEvent, Viewport } from '../../types';
+import { aiFetch } from '../../services/aiRequest';
 
 /**
  * Conversational modal for proposing a convergence the system didn't
@@ -70,7 +71,7 @@ export default function ProposeConvergenceModal({ onClose, viewport, visibleEven
     try {
       const [startYear, endYear] = getVisibleRange(viewport);
       const titles = visibleEvents.slice(0, 80).map(e => e.title);
-      const resp = await fetch('/api/threads/propose', {
+      const resp = await aiFetch('/api/threads/propose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

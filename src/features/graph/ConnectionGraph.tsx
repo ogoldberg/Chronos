@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { TimelineEvent, EventConnection } from '../../types';
+import { aiFetch } from '../../services/aiRequest';
 
 interface Props {
   onNavigate: (year: number, span: number) => void;
@@ -470,7 +471,7 @@ function ConnectionGraph({ onNavigate, onClose, events }: Props) {
     if (!node) return;
     setExpandLoading(true);
     try {
-      const resp = await fetch('/api/chat', {
+      const resp = await aiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

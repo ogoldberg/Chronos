@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { aiFetch } from '../../services/aiRequest';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -155,7 +156,7 @@ function TodayInHistory({ onNavigate, onClose }: Props) {
 
     setLoadingDetail(key);
     try {
-      const resp = await fetch('/api/today/detail', {
+      const resp = await aiFetch('/api/today/detail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

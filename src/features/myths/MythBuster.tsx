@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { HistoricalMyth } from '../../data/myths';
 import { MYTHS } from '../../data/myths';
+import { aiFetch } from '../../services/aiRequest';
 
 interface Props {
   onNavigate?: (year: number, span: number) => void;
@@ -88,7 +89,7 @@ export default function MythBuster({ onNavigate, onAskAI, onClose, centerYear, s
     if (!centerYear || !span) return;
     setLoadingAI(true);
     try {
-      const resp = await fetch('/api/myths', {
+      const resp = await aiFetch('/api/myths', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ centerYear, span }),

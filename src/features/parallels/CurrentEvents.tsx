@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { TimelineEvent } from '../../types';
+import { aiFetch } from '../../services/aiRequest';
 
 interface ParallelEvent {
   title: string;
@@ -44,7 +45,7 @@ function CurrentEvents({ onClose, onNavigate, onAddEvents }: Props) {
     setResults([]);
 
     try {
-      const resp = await fetch('/api/parallels', {
+      const resp = await aiFetch('/api/parallels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q }),

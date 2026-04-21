@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { recordQuizAnswer, getStats } from './gamification';
 import { addReviewCard } from './spacedRepetition';
+import { aiFetch } from '../../services/aiRequest';
 
 interface QuizQuestion {
   question: string;
@@ -48,7 +49,7 @@ export default function QuizPanel({ recentEvents = [], era = 'modern', onClose }
     stopTimer();
 
     try {
-      const resp = await fetch('/api/quiz', {
+      const resp = await aiFetch('/api/quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ events: recentEvents.slice(0, 10), era }),

@@ -1,3 +1,4 @@
+import { aiFetch } from '../../services/aiRequest';
 /**
  * Custom Theme Discovery Hook
  *
@@ -108,7 +109,7 @@ export function useCustomThemeDiscovery({
           count: 8,
         };
 
-        fetch('/api/lens/discover', {
+        aiFetch('/api/lens/discover', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),

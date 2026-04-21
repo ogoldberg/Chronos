@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Viewport, TimelineEvent } from '../../types';
 import { formatYear, scaleLabel } from '../../utils/format';
+import { aiFetch } from '../../services/aiRequest';
 
 interface Props {
   viewport: Viewport;
@@ -30,7 +31,7 @@ export default function InsightsPanel({ viewport, visibleEvents }: Props) {
     lastFetchRef.current = key;
     setLoading(true);
     try {
-      const resp = await fetch('/api/insights', {
+      const resp = await aiFetch('/api/insights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { aiFetch } from '../../services/aiRequest';
 
 /* ─────────────────────────── Types ───────────────────────────────────── */
 
@@ -176,7 +177,7 @@ export default function StudentView({ onClose }: Props) {
     setQuizAnswer(null);
     setQuizSubmitted(false);
     try {
-      const res = await fetch('/api/quiz', {
+      const res = await aiFetch('/api/quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ events: [], era: `${activeUnit.eraStart}-${activeUnit.eraEnd} ${activeUnit.title}` }),

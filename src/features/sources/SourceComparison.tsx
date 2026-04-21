@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { aiFetch } from '../../services/aiRequest';
 
 interface Perspective {
   tradition: string;
@@ -50,7 +51,7 @@ export default function SourceComparison({ onClose, onNavigate }: Props) {
     setHasSearched(true);
 
     try {
-      const resp = await fetch('/api/sources/compare', {
+      const resp = await aiFetch('/api/sources/compare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic: q }),
