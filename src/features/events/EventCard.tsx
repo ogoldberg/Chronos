@@ -47,7 +47,10 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
   const [wiki, setWiki] = useState<WikiData | null>(null);
   const [loading, setLoading] = useState(false);
   const [sources, setSources] = useState<PrimarySource[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
+  const [sourcesAttempted, setSourcesAttempted] = useState(false);
   const [factCheck, setFactCheck] = useState<FactCheckResult | null>(null);
+  const [factCheckLoading, setFactCheckLoading] = useState(false);
   const [verifiedCitations, setVerifiedCitations] = useState<Citation[]>([]);
   const [relatedEvents, setRelatedEvents] = useState<RelatedEvent[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
@@ -72,17 +75,24 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
 
   // AI-powered features — only fetched on user request
   const loadPrimarySources = () => {
-    if (sources.length > 0) return;
+    if (sources.length > 0 || sourcesLoading) return;
+    setSourcesLoading(true);
     fetchPrimarySources(event)
       .then(setSources)
-      .catch(() => setSources([]));
+      .catch(() => setSources([]))
+      .finally(() => {
+        setSourcesLoading(false);
+        setSourcesAttempted(true);
+      });
   };
 
   const loadFactCheck = () => {
-    if (factCheck) return;
+    if (factCheck || factCheckLoading) return;
+    setFactCheckLoading(true);
     factCheckEvent(event.title, event.year, event.description)
       .then(setFactCheck)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setFactCheckLoading(false));
   };
 
   // Wikidata graph: discover related events (free, no AI)
@@ -242,6 +252,7 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
         {event.source === 'discovered' && !factCheck && (
           <button
             onClick={loadFactCheck}
+            disabled={factCheckLoading}
             style={{
               display: 'inline-block',
               padding: '2px 8px',
@@ -254,10 +265,11 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
               background: 'rgba(255,255,255,0.06)',
               color: '#ffffff70',
               border: '1px solid rgba(255,255,255,0.1)',
-              cursor: 'pointer',
+              cursor: factCheckLoading ? 'default' : 'pointer',
+              opacity: factCheckLoading ? 0.6 : 1,
             }}
           >
-            Verify this event
+            {factCheckLoading ? 'Verifying…' : 'Verify this event'}
           </button>
         )}
         {factCheck && (
@@ -561,10 +573,15 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
           </div>
         )}
 
-        {/* Primary Sources — opt-in AI discovery */}
-        {sources.length === 0 && (
+        {/* Primary Sources — opt-in AI discovery.
+            Show button until we've attempted; once attempted, either the
+            sources block below renders or the "no sources found" message
+            does. This way there's no state where the user clicks the
+            button and sees no response. */}
+        {sources.length === 0 && !sourcesAttempted && (
           <button
             onClick={loadPrimarySources}
+            disabled={sourcesLoading}
             style={{
               ...EVENT_ACTION_STYLE,
               marginBottom: 12,
@@ -572,10 +589,22 @@ export default function EventCard({ event, onClose, onAskGuide, onNavigate }: Pr
               background: 'rgba(255,255,255,0.04)',
               borderRadius: 8,
               border: '1px solid rgba(255,255,255,0.08)',
+              opacity: sourcesLoading ? 0.6 : 1,
+              cursor: sourcesLoading ? 'default' : 'pointer',
             }}
           >
-            Find primary sources
+            {sourcesLoading ? 'Searching archives…' : 'Find primary sources'}
           </button>
+        )}
+        {sources.length === 0 && sourcesAttempted && !sourcesLoading && (
+          <div style={{
+            fontSize: 12,
+            color: '#ffffff50',
+            fontStyle: 'italic',
+            marginBottom: 12,
+          }}>
+            No primary sources found for this event.
+          </div>
         )}
         {sources.length > 0 && (
           <div style={{

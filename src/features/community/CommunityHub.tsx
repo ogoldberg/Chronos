@@ -47,6 +47,7 @@ export default function CommunityHub({ onClose }: Props) {
   const [lenses, setLenses] = useState<SharedLens[]>([]);
   const [tours, setTours] = useState<SharedTour[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
 
   /* ---- Fetch community content ---- */
@@ -83,12 +84,15 @@ export default function CommunityHub({ onClose }: Props) {
   /* ---- Share actions ---- */
 
   const shareLens = async () => {
+    if (sharing) return;
     // Get the user's currently active custom lens from localStorage
     const raw = localStorage.getItem('chronos-custom-lenses');
     if (!raw) { setShareStatus('No custom lenses to share.'); return; }
     const custom = JSON.parse(raw);
     if (!custom.length) { setShareStatus('No custom lenses to share.'); return; }
     const latest = custom[custom.length - 1];
+    setSharing(true);
+    setShareStatus('Sharing…');
     try {
       const res = await fetch('/api/community/lenses/share', {
         method: 'POST',
@@ -104,16 +108,21 @@ export default function CommunityHub({ onClose }: Props) {
       }
     } catch {
       setShareStatus('Network error.');
+    } finally {
+      setSharing(false);
     }
     setTimeout(() => setShareStatus(null), 3000);
   };
 
   const shareTour = async () => {
+    if (sharing) return;
     const raw = localStorage.getItem('chronos-custom-tours');
     if (!raw) { setShareStatus('No custom tours to share.'); return; }
     const custom = JSON.parse(raw);
     if (!custom.length) { setShareStatus('No custom tours to share.'); return; }
     const latest = custom[custom.length - 1];
+    setSharing(true);
+    setShareStatus('Sharing…');
     try {
       const res = await fetch('/api/community/tours/share', {
         method: 'POST',
@@ -129,6 +138,8 @@ export default function CommunityHub({ onClose }: Props) {
       }
     } catch {
       setShareStatus('Network error.');
+    } finally {
+      setSharing(false);
     }
     setTimeout(() => setShareStatus(null), 3000);
   };
@@ -288,9 +299,16 @@ export default function CommunityHub({ onClose }: Props) {
       <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <button
           onClick={tab === 'lenses' ? shareLens : shareTour}
-          style={shareBtnStyle}
+          disabled={sharing}
+          style={{
+            ...shareBtnStyle,
+            opacity: sharing ? 0.6 : 1,
+            cursor: sharing ? 'wait' : 'pointer',
+          }}
         >
-          {tab === 'lenses' ? '🔬 Share My Lens' : '🗺️ Share My Tour'}
+          {sharing
+            ? 'Sharing…'
+            : tab === 'lenses' ? '🔬 Share My Lens' : '🗺️ Share My Tour'}
         </button>
       </div>
     </div>
