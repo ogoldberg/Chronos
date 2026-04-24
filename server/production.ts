@@ -64,8 +64,9 @@ async function main() {
     }
   });
 
-  // API routes
-  app.all('/api/*', async (req, res) => {
+  // API routes. Express 5 changed the wildcard syntax: '/api/*' is no
+  // longer accepted by path-to-regexp@8. Use a named splat instead.
+  app.all('/api/{*rest}', async (req, res) => {
     try {
       const result = await handleApiRequest(req.method, req.url, req.body || {}, req.headers as Record<string, string | string[] | undefined>);
       res.status(result.status).json(result.data);
@@ -82,8 +83,9 @@ async function main() {
     index: false, // We handle index.html below for SPA routing
   }));
 
-  // SPA fallback — serve index.html for all non-API, non-static routes
-  app.get('*', (_req, res) => {
+  // SPA fallback — serve index.html for all non-API, non-static routes.
+  // Same Express 5 syntax change applies here.
+  app.get('/{*rest}', (_req, res) => {
     res.sendFile(path.join(STATIC_DIR, 'index.html'));
   });
 
